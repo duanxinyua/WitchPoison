@@ -1,0 +1,12 @@
+{
+  "name": "witch-poison-game",
+  "version": "1.0.0",
+  "dependencies": {
+    "@dcloudio/uni-ui": "^1.4.0",
+    "axios": "^0.27.2"
+  },
+  "scripts": {
+    "dev:mp-weixin": "uni-app run -p mp-weixin",
+    "build:mp-weixin": "uni-app build -p mp-weixin"
+  }
+}

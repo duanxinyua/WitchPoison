@@ -1,0 +1,20 @@
+{
+    "pages": [
+        {
+            "path": "pages/index/index",
+            "style": {
+                "navigationBarTitleText": "首页"
+            }
+        },
+        {
+            "path": "pages/game/game",
+            "style": {
+                "navigationBarTitleText": "游戏"
+            }
+        }
+    ],
+    "globalStyle": {
+        "navigationBarTextStyle": "black",
+        "navigationBarBackgroundColor": "#f8f8f8"
+    }
+}
