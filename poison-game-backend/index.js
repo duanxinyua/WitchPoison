@@ -273,8 +273,19 @@ class Game {
       this.currentPlayerIndex = 0;
     }
     
-    if (this.status === 'playing' && this.players[this.currentPlayerIndex]?.id === clientId) {
-      this.nextTurn();
+    if (this.status === 'playing') {
+      // 检查是否需要重置游戏状态
+      if (this.players.length < this.playerCount) {
+        this.status = 'waiting';
+        this.gameStarted = false;
+        debugLog('游戏中玩家退出导致人数不足，重置游戏状态:', { 
+          roomId: this.roomId, 
+          playersLeft: this.players.length, 
+          requiredPlayers: this.playerCount 
+        });
+      } else if (this.players[this.currentPlayerIndex]?.id === clientId) {
+        this.nextTurn();
+      }
     }
     
     // 修复：等待重启状态下的玩家移除逻辑
