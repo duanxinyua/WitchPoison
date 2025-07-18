@@ -87,6 +87,26 @@ class Game {
       // 替换旧的玩家记录
       this.players[existingPlayerIndex] = { id, name, emoji: this.players[existingPlayerIndex].emoji, poisonPos: null, isOut: false, clientId: id };
       debugLog('玩家重新加入（替换旧记录）:', { id, name, roomId: this.roomId, players: this.players.length, status: this.status });
+      
+      // 重要：替换记录后也需要检查房间状态是否需要更新
+      // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
+      if ((this.status === 'waitingForRestart' || this.status === 'ended') && this.players.length < this.playerCount) {
+        this.status = 'waiting';
+        this.gameStarted = false; // 重要：重置游戏开始标志
+        debugLog('替换记录后房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted, oldStatus: this.status });
+      }
+      
+      // 更新房间状态逻辑
+      if (this.players.length === this.playerCount) {
+        if (this.status === 'waiting') {
+          this.status = 'settingPoison';
+          this.currentPlayerIndex = 0;
+          debugLog('替换记录后房间满员，切换到设置毒药阶段:', { roomId: this.roomId, status: this.status });
+        }
+        // 注意：如果状态是'waitingForRestart'，不应该自动转换为'settingPoison'
+        // 因为游戏仍在等待重启确认
+      }
+      
       return { success: true };
     }
     
