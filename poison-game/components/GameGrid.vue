@@ -14,7 +14,8 @@
         :data-col="colIndex"
         @tap.stop="handleClick"
       >
-        <text v-if="cell">{{ cell }}</text>
+        <text v-if="cell === 'poison'">💀</text>
+        <text v-else-if="cell">{{ cell }}</text>
         <text v-else-if="showPoisonHint(rowIndex, colIndex)">💀</text>
         <text v-else></text>
       </view>
