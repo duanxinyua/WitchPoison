@@ -132,7 +132,7 @@ export default {
   /* 外观样式 */
   border: 3rpx solid rgba(0, 122, 255, 0.2);
   border-radius: 15rpx;
-  background: linear-gradient(135deg, #ffffff, #f8f9fa);
+  background: linear-gradient(135deg, #ffffff, #f8fbff);
   
   /* 布局和排版 */
   display: flex;

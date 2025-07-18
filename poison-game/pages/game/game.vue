@@ -507,10 +507,10 @@ export default {
 </script>
 
 <style>
-/* 游戏主界面容器 - 采用渐变背景和卡片式布局 */
+/* 游戏主界面容器 - 清新轻松的背景色调 */
 .game {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 50%, #fff5f5 100%);
   padding: 30rpx;
   display: flex;
   flex-direction: column;

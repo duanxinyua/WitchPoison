@@ -425,10 +425,10 @@ export default {
 </script>
 
 <style>
-/* 首页主容器 - 魔法主题渐变背景 */
+/* 首页主容器 - 清新轻松的背景色调 */
 .index {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #e3f2fd 0%, #f1f8e9 50%, #fff3e0 100%);
   padding: 40rpx 20rpx;
   display: flex;
   flex-direction: column;
@@ -436,18 +436,18 @@ export default {
   position: relative;
 }
 
-/* 游戏标题 - 魔法风格设计 */
+/* 游戏标题 - 清新活泼的设计 */
 .title {
   font-size: 64rpx;
   font-weight: 700;
-  background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+  background: linear-gradient(45deg, #42a5f5, #26c6da, #66bb6a, #ffa726);
   background-size: 400% 400%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 60rpx;
   text-align: center;
   animation: gradient 3s ease infinite;
-  text-shadow: 0 0 30rpx rgba(255, 255, 255, 0.3);
+  text-shadow: 0 0 20rpx rgba(255, 255, 255, 0.5);
   letter-spacing: 4rpx;
 }
 
