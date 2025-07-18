@@ -119,8 +119,16 @@ export default {
       }
     },
     goToAvatarPage() {
+      console.log('跳转到头像页面');
       uni.navigateTo({
-        url: '/pages/avatar/avatar'
+        url: '/pages/avatar/avatar',
+        success: () => {
+          console.log('跳转头像页面成功');
+        },
+        fail: (err) => {
+          console.error('跳转头像页面失败:', err);
+          uni.showToast({ title: '跳转失败，请重试', icon: 'error' });
+        }
       });
     },
     editNickname() {
