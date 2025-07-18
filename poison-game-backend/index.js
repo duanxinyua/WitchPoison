@@ -52,11 +52,11 @@ class Game {
       return { success: false, message: '玩家已在房间中' };
     }
     
-    // 如果房间在等待重启状态且人数不满，重置为等待状态
-    if (this.status === 'waitingForRestart' && this.players.length < this.playerCount) {
+    // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
+    if ((this.status === 'waitingForRestart' || this.status === 'ended') && this.players.length < this.playerCount) {
       this.status = 'waiting';
       this.gameStarted = false; // 重要：重置游戏开始标志
-      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted });
+      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted, oldStatus: this.status });
     }
     
     const emoji = this.emojis[this.players.length % this.emojis.length];
@@ -205,10 +205,8 @@ class Game {
     
     // 修复：等待重启状态下的玩家移除逻辑
     if (this.status === 'waitingForRestart') {
-      // 如果还有足够玩家，保持ended状态；否则重置为waiting
-      if (this.players.length >= this.playerCount) {
-        this.status = 'ended';
-      } else {
+      // 如果还有足够玩家，保持waitingForRestart状态；否则重置为waiting
+      if (this.players.length < this.playerCount) {
         this.status = 'waiting';
         this.gameStarted = false; // 重要：重置游戏开始标志
         // 清除该房间的重启请求记录
@@ -429,7 +427,13 @@ wss.on('connection', (ws, req) => {
           let roomRequests = restartRequests.get(roomId);
           if (roomRequests) {
             roomRequests.delete(clientId);
-            restartRequests.set(roomId, roomRequests);
+            // 如果游戏状态重置为waiting，清空重启请求
+            if (game.status === 'waiting') {
+              restartRequests.delete(roomId);
+              debugLog('游戏状态重置为waiting，清空重启请求:', { roomId });
+            } else {
+              restartRequests.set(roomId, roomRequests);
+            }
           }
           broadcast(roomId, { type: 'playerLeft', state, players: game.players });
           if (game.players.length === 0) {
@@ -522,7 +526,13 @@ function handleClientDisconnect(clientId) {
       let roomRequests = restartRequests.get(roomId);
       if (roomRequests) {
         roomRequests.delete(clientId);
-        restartRequests.set(roomId, roomRequests);
+        // 如果游戏状态重置为waiting，清空重启请求
+        if (game.status === 'waiting') {
+          restartRequests.delete(roomId);
+          debugLog('游戏状态重置为waiting，清空重启请求:', { roomId });
+        } else {
+          restartRequests.set(roomId, roomRequests);
+        }
       }
       broadcast(roomId, { type: 'playerLeft', state, players: game.players });
     }
