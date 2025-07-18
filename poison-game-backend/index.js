@@ -55,7 +55,8 @@ class Game {
     // 如果房间在等待重启状态且人数不满，重置为等待状态
     if (this.status === 'waitingForRestart' && this.players.length < this.playerCount) {
       this.status = 'waiting';
-      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length });
+      this.gameStarted = false; // 重要：重置游戏开始标志
+      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted });
     }
     
     const emoji = this.emojis[this.players.length % this.emojis.length];
@@ -209,15 +210,17 @@ class Game {
         this.status = 'ended';
       } else {
         this.status = 'waiting';
+        this.gameStarted = false; // 重要：重置游戏开始标志
         // 清除该房间的重启请求记录
-        debugLog('清除重启请求记录:', { roomId: this.roomId });
+        debugLog('清除重启请求记录，重置游戏状态:', { roomId: this.roomId, gameStarted: this.gameStarted });
       }
     }
     
     // 修复：游戏结束状态下人数不足时重置为等待
     if (this.status === 'ended' && this.players.length < this.playerCount) {
       this.status = 'waiting';
-      debugLog('游戏结束状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length });
+      this.gameStarted = false; // 重要：重置游戏开始标志
+      debugLog('游戏结束状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted });
     }
     
     debugLog('玩家移除:', { clientId, roomId: this.roomId, remainingPlayers: this.players.length, newStatus: this.status });
