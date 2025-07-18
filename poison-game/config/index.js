@@ -1,5 +1,7 @@
 
-// 后端服务配置 - 根据环境自动选择地址
+// 后端服务配置 - 当前统一使用生产环境
+// 注释：环境判断逻辑已保留，如需切换可取消注释
+/*
 function getEnvironmentConfig() {
   // 判断是否为开发环境
   const isDevelopment = process.env.NODE_ENV === 'development' || 
@@ -26,10 +28,17 @@ function getEnvironmentConfig() {
 }
 
 const config = getEnvironmentConfig();
+*/
+
+// 当前配置：统一使用生产环境地址
+const config = {
+  backendUrl: 'https://dxywitch.linhaitec.com',
+  wsUrl: 'wss://dxywitch.linhaitec.com'
+};
 
 // 输出当前环境配置到控制台，便于调试
 console.log('当前环境配置:', {
-  环境: config.backendUrl.includes('192.168.') ? '开发环境' : '生产环境',
+  环境: '生产环境（统一配置）',
   HTTP地址: config.backendUrl,
   WebSocket地址: config.wsUrl
 });
