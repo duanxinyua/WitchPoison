@@ -1,18 +1,15 @@
 <template>
   <view class="game">
     <view class="room-info">房间 ID: {{ roomId }}</view>
-    <view class="players">
-      <view v-for="player in players" :key="player.id + '_' + player.name" class="player" :class="{ active: currentPlayer && currentPlayer.id === player.id }">
-        <text>{{ player.name }} ({{ player.emoji }})</text>
-        <text v-if="player.isOut">已出局</text>
-        <text v-else-if="player.poisonPos">已设置毒药</text>
-        <text v-else>待设置毒药</text>
+    <view class="player-info">
+      <view class="current-player">
+        <text>{{ getCurrentPlayerName() }}</text>
       </view>
     </view>
     <view class="status">
       <text v-if="status === 'waiting'">等待玩家加入（{{ players.length }}/{{ playerCount }}）</text>
       <text v-else-if="status === 'settingPoison'">请设置毒药位置</text>
-      <text v-else-if="status === 'playing' && currentPlayer">当前玩家：{{ currentPlayer.name }} ({{ currentPlayer.emoji }})</text>
+      <text v-else-if="status === 'playing' && currentPlayer">当前回合：{{ currentPlayer.name }} ({{ currentPlayer.emoji }})</text>
       <text v-else-if="status === 'ended'">游戏结束！{{ gameResult ? (gameResult.status === 'win' ? `胜利者：${gameResult.winner}` : '平局') : '' }}</text>
       <text v-else-if="status === 'waitingForRestart'">等待其他玩家同意重启（{{ restartCount }}/{{ playerCount }}）</text>
     </view>
@@ -21,6 +18,8 @@
       :game-started="gameStarted"
       :poison-set="!!players.find(p => p.id === clientId)?.poisonPos"
       :game-result="gameResult"
+      :current-player-poison="getCurrentPlayerPoisonPos()"
+      :status="status"
       @cell-click="handleCellClick"
     />
     <view class="actions" v-if="status === 'ended' || status === 'waiting' || status === 'waitingForRestart'">
@@ -447,6 +446,14 @@ export default {
         },
       });
     },
+    getCurrentPlayerName() {
+      const currentPlayer = this.players.find(p => p.id === this.clientId);
+      return currentPlayer ? `${currentPlayer.name} (${currentPlayer.emoji})` : '未知玩家';
+    },
+    getCurrentPlayerPoisonPos() {
+      const currentPlayer = this.players.find(p => p.id === this.clientId);
+      return currentPlayer ? currentPlayer.poisonPos : null;
+    },
   },
   onLoad(options) {
     console.log('游戏页面加载:', options);
@@ -531,40 +538,26 @@ export default {
   letter-spacing: 2rpx;
 }
 
-/* 玩家列表容器 - 卡片式设计 */
-.players {
+/* 玩家信息容器 - 简化设计 */
+.player-info {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10rpx);
   border-radius: 20rpx;
-  padding: 30rpx;
+  padding: 20rpx 30rpx;
   margin-bottom: 30rpx;
   box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-  width: 90%;
-  max-width: 600rpx;
+  text-align: center;
 }
 
-/* 单个玩家信息 - 添加状态指示和动画 */
-.player {
-  font-size: 30rpx;
-  padding: 15rpx 20rpx;
-  margin-bottom: 10rpx;
-  border-radius: 15rpx;
-  background: rgba(108, 117, 125, 0.1);
-  transition: all 0.3s ease;
-  border-left: 4rpx solid transparent;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* 当前玩家高亮 - 渐变边框和强调色 */
-.player.active {
-  background: linear-gradient(90deg, rgba(0, 122, 255, 0.1), rgba(88, 86, 214, 0.1));
-  border-left: 4rpx solid #007aff;
+/* 当前玩家显示 */
+.current-player {
+  font-size: 32rpx;
   font-weight: 600;
   color: #007aff;
-  transform: translateX(10rpx);
-  box-shadow: 0 4rpx 15rpx rgba(0, 122, 255, 0.2);
+  padding: 10rpx 20rpx;
+  border-radius: 15rpx;
+  background: linear-gradient(90deg, rgba(0, 122, 255, 0.1), rgba(88, 86, 214, 0.1));
+  display: inline-block;
 }
 
 /* 游戏状态显示 - 更醒目的设计 */

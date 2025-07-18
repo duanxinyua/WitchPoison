@@ -5,13 +5,18 @@
         v-for="(cell, colIndex) in row"
         :key="`cell-${rowIndex}-${colIndex}`"
         class="cell"
-        :class="{ poison: cell === 'poison', disabled: cell || gameResult }"
+        :class="{ 
+          poison: cell === 'poison', 
+          disabled: cell || gameResult,
+          'poison-hint': showPoisonHint(rowIndex, colIndex)
+        }"
         :data-row="rowIndex"
         :data-col="colIndex"
         @tap.stop="handleClick"
       >
         <text v-if="cell">{{ cell }}</text>
-        <text v-else-if="gameStarted || !poisonSet">?</text>
+        <text v-else-if="showPoisonHint(rowIndex, colIndex)">💀</text>
+        <text v-else></text>
       </view>
     </view>
   </view>
@@ -37,6 +42,14 @@ export default {
       type: Object,
       default: null,
     },
+    currentPlayerPoison: {
+      type: Object,
+      default: null,
+    },
+    status: {
+      type: String,
+      default: 'waiting',
+    },
   },
   data() {
     return {
@@ -55,6 +68,13 @@ export default {
       } else {
         console.warn('�����Ч:', { boardValue: this.board[rowIndex][colIndex], gameResult: this.gameResult, isMounted: this.isMounted });
       }
+    },
+    showPoisonHint(row, col) {
+      // 只在设置毒药阶段显示自己的毒药位置
+      if (this.status === 'settingPoison' && this.currentPlayerPoison) {
+        return this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
+      }
+      return false;
     },
   },
   watch: {
@@ -226,6 +246,34 @@ export default {
   color: #6c757d;
   font-size: 28rpx;
   opacity: 0.7;
+}
+
+/* 毒药提示样式 - 设置毒药阶段显示自己的毒药 */
+.cell.poison-hint {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  border-color: #ff9800;
+  color: white;
+  box-shadow: 0 4rpx 15rpx rgba(255, 152, 0, 0.3),
+              inset 0 1rpx 0 rgba(255, 255, 255, 0.2);
+  animation: poisonHintPulse 1.5s ease-in-out infinite;
+}
+
+/* 毒药提示脉冲动画 */
+@keyframes poisonHintPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* 毒药提示文字样式 */
+.cell.poison-hint text {
+  font-size: 28rpx;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
 }
 
 /* 响应式设计 - 针对不同屏幕尺寸调整 */
