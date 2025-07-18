@@ -622,41 +622,95 @@ export default {
   width: 200rpx;
 }
 
-/* 数字输入组件 */
+/* 数字输入组件 - 优化布局和按钮样式 */
 .number-input {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 15rpx;
-  background: rgba(247, 248, 249, 0.8);
-  border-radius: 15rpx;
-  padding: 10rpx;
+  justify-content: center;
+  gap: 20rpx;
+  background: rgba(247, 248, 249, 0.9);
+  border-radius: 18rpx;
+  padding: 15rpx 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  border: 1rpx solid rgba(0, 122, 255, 0.1);
 }
 
+/* 数字加减按钮 - 修复显示和交互问题 */
 .number-input button {
-  width: 70rpx;
-  height: 70rpx;
-  line-height: 70rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  padding: 0;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #007aff, #5856d6);
-  box-shadow: 0 4rpx 10rpx rgba(0, 122, 255, 0.2);
+  /* 尺寸和布局 */
+  width: 60rpx !important;
+  height: 60rpx !important;
+  min-width: 60rpx;
+  min-height: 60rpx;
+  
+  /* 文字样式 */
+  font-size: 32rpx !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  color: white !important;
+  
+  /* 重置默认样式 */
+  padding: 0 !important;
+  margin: 0;
+  border: none !important;
+  outline: none;
+  
+  /* 外观样式 */
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #007aff, #5856d6) !important;
+  box-shadow: 0 4rpx 12rpx rgba(0, 122, 255, 0.25) !important;
+  
+  /* 布局居中 */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  /* 过渡效果 */
+  transition: all 0.2s ease !important;
+  cursor: pointer;
 }
 
-/* 数字输入框 */
+/* 数字按钮悬停效果 */
+.number-input button:hover {
+  transform: translateY(-2rpx) scale(1.05) !important;
+  box-shadow: 0 6rpx 16rpx rgba(0, 122, 255, 0.35) !important;
+}
+
+/* 数字按钮点击效果 */
+.number-input button:active {
+  transform: translateY(0) scale(0.95) !important;
+  box-shadow: 0 2rpx 8rpx rgba(0, 122, 255, 0.2) !important;
+}
+
+/* 数字输入框 - 优化样式与按钮协调 */
 .number-field {
-  width: 100rpx;
-  height: 70rpx;
-  line-height: 70rpx;
-  text-align: center;
-  font-size: 32rpx;
-  font-weight: 600;
-  border: 2rpx solid rgba(0, 122, 255, 0.2);
-  border-radius: 12rpx;
-  background: rgba(255, 255, 255, 0.9);
-  color: #2c3e50;
+  width: 80rpx !important;
+  height: 60rpx !important;
+  line-height: 60rpx !important;
+  text-align: center !important;
+  font-size: 32rpx !important;
+  font-weight: 600 !important;
+  border: 2rpx solid rgba(0, 122, 255, 0.3) !important;
+  border-radius: 12rpx !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #2c3e50 !important;
+  
+  /* 重置默认样式 */
+  padding: 0 !important;
+  margin: 0;
+  outline: none;
+  box-sizing: border-box;
+  
+  /* 过渡效果 */
+  transition: all 0.2s ease;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 数字输入框焦点效果 */
+.number-field:focus {
+  border-color: #007aff !important;
+  box-shadow: 0 4rpx 12rpx rgba(0, 122, 255, 0.15) !important;
 }
 
 /* 表单操作按钮 */
