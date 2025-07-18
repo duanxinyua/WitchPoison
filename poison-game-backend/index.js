@@ -55,7 +55,8 @@ class Game {
         status: this.status, 
         roomId: this.roomId, 
         playerId: id,
-        playerName: name
+        playerName: name,
+        currentPlayers: this.players.map(p => ({ id: p.id, name: p.name }))
       });
       return { success: false, message: '游戏进行中，无法加入' };
     }
@@ -101,10 +102,13 @@ class Game {
     
     // 更新房间状态逻辑
     if (this.players.length === this.playerCount) {
-      if (this.status === 'waiting' || this.status === 'waitingForRestart') {
+      if (this.status === 'waiting') {
         this.status = 'settingPoison';
         this.currentPlayerIndex = 0;
+        debugLog('房间满员，切换到设置毒药阶段:', { roomId: this.roomId, status: this.status });
       }
+      // 注意：如果状态是'waitingForRestart'，不应该自动转换为'settingPoison'
+      // 因为游戏仍在等待重启确认
     }
     
     debugLog('玩家加入:', { id, name, roomId: this.roomId, players: this.players.length, status: this.status });
@@ -260,7 +264,12 @@ class Game {
         this.status = 'waiting';
         this.gameStarted = false; // 重要：重置游戏开始标志
         // 清除该房间的重启请求记录
-        debugLog('清除重启请求记录，重置游戏状态:', { roomId: this.roomId, gameStarted: this.gameStarted });
+        debugLog('清除重启请求记录，重置游戏状态:', { 
+          roomId: this.roomId, 
+          gameStarted: this.gameStarted,
+          playersLeft: this.players.length,
+          requiredPlayers: this.playerCount
+        });
       }
     }
     
