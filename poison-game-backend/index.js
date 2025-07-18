@@ -29,29 +29,47 @@ class Game {
     this.players = [];
     this.currentPlayerIndex = 0;
     this.playerCount = playerCount;
-    this.emojis = ['😺', '🐶', '🐰', '🦅', '🐘'];
+    // 玩家头像emoji数组 - 确保每个头像都不重复，支持更多玩家
+    this.emojis = ['😺', '🐶', '🐰', '🦅', '🐘', '🐸', '🦊', '🐯', '🐨', '🐼'];
     this.gameStarted = false;
     this.status = 'waiting';
   }
 
   addPlayer(id, name) {
-    if (this.players.length >= this.playerCount || this.gameStarted) {
-      return { success: false, message: '房间已满或游戏已开始' };
+    // 修复：如果游戏已开始但处于等待重启状态，允许原玩家重新加入
+    if (this.players.length >= this.playerCount && this.status !== 'waitingForRestart') {
+      return { success: false, message: '房间已满' };
+    }
+    if (this.gameStarted && this.status !== 'waitingForRestart' && this.status !== 'ended') {
+      return { success: false, message: '游戏进行中，无法加入' };
     }
     if (!id || !name || typeof name !== 'string' || name.length > 20) {
       return { success: false, message: '无效的玩家ID或昵称' };
     }
+    
     // 检查是否已存在相同 clientId
     if (this.players.some(p => p.id === id)) {
       return { success: false, message: '玩家已在房间中' };
     }
+    
+    // 如果房间在等待重启状态且人数不满，重置为等待状态
+    if (this.status === 'waitingForRestart' && this.players.length < this.playerCount) {
+      this.status = 'waiting';
+      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length });
+    }
+    
     const emoji = this.emojis[this.players.length % this.emojis.length];
     this.players.push({ id, name, emoji, poisonPos: null, isOut: false, clientId: id });
+    
+    // 更新房间状态逻辑
     if (this.players.length === this.playerCount) {
-      this.status = 'settingPoison';
-      this.currentPlayerIndex = 0;
+      if (this.status === 'waiting' || this.status === 'waitingForRestart') {
+        this.status = 'settingPoison';
+        this.currentPlayerIndex = 0;
+      }
     }
-    debugLog('玩家加入:', { id, name, roomId: this.roomId, players: this.players.length });
+    
+    debugLog('玩家加入:', { id, name, roomId: this.roomId, players: this.players.length, status: this.status });
     return { success: true };
   }
 
@@ -173,17 +191,36 @@ class Game {
     const initialLength = this.players.length;
     this.players = this.players.filter(p => p.id !== clientId);
     if (this.players.length === 0) return null;
+    
+    // 处理不同状态下的玩家移除逻辑
     if (this.status === 'settingPoison' && this.players.length < this.playerCount) {
       this.status = 'waiting';
       this.currentPlayerIndex = 0;
     }
+    
     if (this.status === 'playing' && this.players[this.currentPlayerIndex]?.id === clientId) {
       this.nextTurn();
     }
+    
+    // 修复：等待重启状态下的玩家移除逻辑
     if (this.status === 'waitingForRestart') {
-      this.status = this.players.length === this.playerCount ? 'ended' : 'waiting';
+      // 如果还有足够玩家，保持ended状态；否则重置为waiting
+      if (this.players.length >= this.playerCount) {
+        this.status = 'ended';
+      } else {
+        this.status = 'waiting';
+        // 清除该房间的重启请求记录
+        debugLog('清除重启请求记录:', { roomId: this.roomId });
+      }
     }
-    debugLog('玩家移除:', { clientId, roomId: this.roomId, remainingPlayers: this.players.length });
+    
+    // 修复：游戏结束状态下人数不足时重置为等待
+    if (this.status === 'ended' && this.players.length < this.playerCount) {
+      this.status = 'waiting';
+      debugLog('游戏结束状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length });
+    }
+    
+    debugLog('玩家移除:', { clientId, roomId: this.roomId, remainingPlayers: this.players.length, newStatus: this.status });
     return initialLength > this.players.length ? this.getState() : false;
   }
 
