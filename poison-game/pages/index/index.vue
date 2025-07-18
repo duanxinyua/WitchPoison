@@ -425,151 +425,287 @@ export default {
 </script>
 
 <style>
+/* 首页主容器 - 魔法主题渐变背景 */
 .index {
-  padding: 20rpx;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40rpx 20rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
 }
+
+/* 游戏标题 - 魔法风格设计 */
 .title {
-  font-size: 48rpx;
-  margin-bottom: 40rpx;
-}
-.nickname-section {
-  width: 80%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20rpx;
+  font-size: 64rpx;
+  font-weight: 700;
+  background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   margin-bottom: 60rpx;
+  text-align: center;
+  animation: gradient 3s ease infinite;
+  text-shadow: 0 0 30rpx rgba(255, 255, 255, 0.3);
+  letter-spacing: 4rpx;
 }
+
+/* 渐变文字动画 */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 昵称设置区域 - 卡片式设计 */
+.nickname-section {
+  width: 90%;
+  max-width: 500rpx;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  border-radius: 25rpx;
+  padding: 40rpx;
+  margin-bottom: 50rpx;
+  box-shadow: 0 15rpx 35rpx rgba(0, 0, 0, 0.1);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+}
+
+/* 昵称显示 */
 .nickname-display {
   width: 100%;
   text-align: center;
+  padding: 20rpx;
 }
+
 .nickname-display text {
-  font-size: 36rpx;
-  color: #333;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #2c3e50;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
 }
+
+/* 昵称输入区域 */
 .nickname-input {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 25rpx;
 }
-.input {
-  border: 2rpx solid #ccc;
-  padding: 20rpx;
-  border-radius: 10rpx;
-  height: 80rpx;
-  line-height: 80rpx;
+
+/* 输入框样式优化 */
+.input, .input-field {
+  border: 2rpx solid rgba(0, 122, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 25rpx 20rpx;
+  border-radius: 15rpx;
+  height: 90rpx;
+  line-height: 90rpx;
   font-size: 32rpx;
   width: 100%;
+  transition: all 0.3s ease;
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.05);
 }
-.input-field {
-  border: 2rpx solid #ccc;
-  padding: 20rpx;
-  border-radius: 10rpx;
-  height: 80rpx;
-  line-height: 80rpx;
-  font-size: 32rpx;
-  width: 100%;
+
+.input:focus, .input-field:focus {
+  border-color: #007aff;
+  box-shadow: 0 6rpx 20rpx rgba(0, 122, 255, 0.15);
+  transform: translateY(-2rpx);
 }
+
+/* 房间操作区域 */
 .room-section {
-  width: 80%;
+  width: 90%;
+  max-width: 500rpx;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 30rpx;
 }
+
+/* 房间操作按钮组 */
 .room-actions {
   display: flex;
-  gap: 20rpx;
+  gap: 25rpx;
   justify-content: center;
+  flex-wrap: wrap;
 }
+
+/* 模态框背景 */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(5rpx);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  animation: fadeIn 0.3s ease;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 创建房间表单 */
 .create-form {
-  background-color: #fff;
-  padding: 40rpx;
-  border-radius: 20rpx;
-  width: 600rpx;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10rpx);
+  padding: 50rpx;
+  border-radius: 25rpx;
+  width: 90%;
+  max-width: 600rpx;
   display: flex;
   flex-direction: column;
   gap: 30rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.2);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  animation: slideUp 0.3s ease;
 }
+
+/* 加入房间表单 */
 .join-form {
-  background-color: #fff;
-  padding: 40rpx;
-  border-radius: 20rpx;
-  width: 500rpx;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10rpx);
+  padding: 50rpx;
+  border-radius: 25rpx;
+  width: 90%;
+  max-width: 500rpx;
   display: flex;
   flex-direction: column;
   gap: 30rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.2);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  animation: slideUp 0.3s ease;
 }
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(50rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 表单标题 */
 .form-title {
-  font-size: 36rpx;
+  font-size: 40rpx;
+  font-weight: 600;
   text-align: center;
   margin-bottom: 20rpx;
+  color: #2c3e50;
+  letter-spacing: 2rpx;
 }
+
+/* 表单项 */
 .form-item {
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
+  padding: 10rpx 0;
 }
+
+/* 表单标签 */
 .form-label {
   font-size: 32rpx;
-  color: #333;
+  font-weight: 500;
+  color: #34495e;
   width: 200rpx;
 }
+
+/* 数字输入组件 */
 .number-input {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10rpx;
+  gap: 15rpx;
+  background: rgba(247, 248, 249, 0.8);
+  border-radius: 15rpx;
+  padding: 10rpx;
 }
+
 .number-input button {
-  width: 80rpx;
-  height: 80rpx;
-  line-height: 80rpx;
-  font-size: 32rpx;
+  width: 70rpx;
+  height: 70rpx;
+  line-height: 70rpx;
+  font-size: 28rpx;
+  font-weight: 600;
   padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #007aff, #5856d6);
+  box-shadow: 0 4rpx 10rpx rgba(0, 122, 255, 0.2);
 }
+
+/* 数字输入框 */
 .number-field {
   width: 100rpx;
-  height: 80rpx;
-  line-height: 80rpx;
+  height: 70rpx;
+  line-height: 70rpx;
   text-align: center;
   font-size: 32rpx;
-  border: 2rpx solid #ccc;
-  border-radius: 10rpx;
+  font-weight: 600;
+  border: 2rpx solid rgba(0, 122, 255, 0.2);
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2c3e50;
 }
+
+/* 表单操作按钮 */
 .form-actions {
   display: flex;
   flex-direction: row;
   justify-content: center;
-  gap: 20rpx;
-  margin-top: 20rpx;
+  gap: 25rpx;
+  margin-top: 30rpx;
 }
+
+/* 按钮统一样式优化 */
 button {
-  padding: 20rpx 40rpx;
-  background-color: #007aff;
+  padding: 25rpx 45rpx;
+  background: linear-gradient(135deg, #007aff, #5856d6);
   color: white;
-  border-radius: 10rpx;
+  border-radius: 25rpx;
   font-size: 32rpx;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 8rpx 20rpx rgba(0, 122, 255, 0.3);
+  transition: all 0.3s ease;
+  letter-spacing: 1rpx;
+  min-width: 160rpx;
 }
+
+/* 按钮悬停效果 */
+button:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 25rpx rgba(0, 122, 255, 0.4);
+}
+
+/* 按钮点击效果 */
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 4rpx 10rpx rgba(0, 122, 255, 0.2);
+}
+
+/* 按钮禁用状态 */
 button:disabled {
-  background-color: #ccc;
+  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
+  transform: none;
+  opacity: 0.6;
+}
+
+/* 取消按钮特殊样式 */
+button:last-child {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  box-shadow: 0 8rpx 20rpx rgba(108, 117, 125, 0.3);
 }
 </style>

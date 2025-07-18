@@ -507,46 +507,128 @@ export default {
 </script>
 
 <style>
+/* 游戏主界面容器 - 采用渐变背景和卡片式布局 */
 .game {
-  padding: 20rpx;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 30rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
+
+/* 房间信息卡片 - 添加阴影和圆角效果 */
 .room-info {
-  font-size: 32rpx;
-  margin-bottom: 20rpx;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 20rpx 40rpx;
+  border-radius: 25rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
+  letter-spacing: 2rpx;
 }
+
+/* 玩家列表容器 - 卡片式设计 */
 .players {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  margin-bottom: 20rpx;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
+  width: 90%;
+  max-width: 600rpx;
 }
+
+/* 单个玩家信息 - 添加状态指示和动画 */
 .player {
-  font-size: 28rpx;
+  font-size: 30rpx;
+  padding: 15rpx 20rpx;
+  margin-bottom: 10rpx;
+  border-radius: 15rpx;
+  background: rgba(108, 117, 125, 0.1);
+  transition: all 0.3s ease;
+  border-left: 4rpx solid transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+
+/* 当前玩家高亮 - 渐变边框和强调色 */
 .player.active {
-  font-weight: bold;
+  background: linear-gradient(90deg, rgba(0, 122, 255, 0.1), rgba(88, 86, 214, 0.1));
+  border-left: 4rpx solid #007aff;
+  font-weight: 600;
   color: #007aff;
+  transform: translateX(10rpx);
+  box-shadow: 0 4rpx 15rpx rgba(0, 122, 255, 0.2);
 }
+
+/* 游戏状态显示 - 更醒目的设计 */
 .status {
-  font-size: 32rpx;
-  margin-bottom: 20rpx;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  font-size: 34rpx;
+  font-weight: 500;
+  color: #2c3e50;
+  padding: 25rpx 40rpx;
+  border-radius: 20rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 6rpx 25rpx rgba(0, 0, 0, 0.1);
+  text-align: center;
+  min-width: 400rpx;
 }
+
+/* 操作按钮容器 */
 .actions {
   margin-top: 40rpx;
   display: flex;
-  gap: 20rpx;
+  gap: 25rpx;
+  flex-wrap: wrap;
+  justify-content: center;
 }
+
+/* 按钮统一样式 - 现代化设计 */
 button {
-  padding: 20rpx 40rpx;
-  background-color: #007aff;
+  padding: 25rpx 50rpx;
+  background: linear-gradient(135deg, #007aff, #5856d6);
   color: white;
-  border-radius: 10rpx;
+  border-radius: 25rpx;
   font-size: 32rpx;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 8rpx 20rpx rgba(0, 122, 255, 0.3);
+  transition: all 0.3s ease;
+  letter-spacing: 1rpx;
+  min-width: 180rpx;
 }
+
+/* 按钮悬停效果（适用于支持的平台） */
+button:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 25rpx rgba(0, 122, 255, 0.4);
+}
+
+/* 按钮禁用状态 */
 button:disabled {
-  background-color: #ccc;
+  background: linear-gradient(135deg, #c8c9ca, #a8a9aa);
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
+  transform: none;
+  opacity: 0.6;
+}
+
+/* 重启按钮特殊样式 */
+button:first-child {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  box-shadow: 0 8rpx 20rpx rgba(40, 167, 69, 0.3);
+}
+
+/* 返回按钮特殊样式 */
+button:last-child {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  box-shadow: 0 8rpx 20rpx rgba(108, 117, 125, 0.3);
 }
 </style>
