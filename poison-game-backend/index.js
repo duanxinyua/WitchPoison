@@ -65,7 +65,28 @@ class Game {
     
     // 检查是否已存在相同 clientId
     if (this.players.some(p => p.id === id)) {
+      debugLog('拒绝加入 - 玩家已在房间中:', { 
+        playerId: id, 
+        playerName: name,
+        existingPlayers: this.players.map(p => ({ id: p.id, name: p.name })),
+        roomId: this.roomId
+      });
       return { success: false, message: '玩家已在房间中' };
+    }
+    
+    // 检查是否已存在相同名字的玩家（可能是断线重连）
+    const existingPlayerIndex = this.players.findIndex(p => p.name === name);
+    if (existingPlayerIndex !== -1) {
+      debugLog('发现同名玩家，替换旧记录:', { 
+        playerId: id, 
+        playerName: name,
+        oldPlayerId: this.players[existingPlayerIndex].id,
+        roomId: this.roomId
+      });
+      // 替换旧的玩家记录
+      this.players[existingPlayerIndex] = { id, name, emoji: this.players[existingPlayerIndex].emoji, poisonPos: null, isOut: false, clientId: id };
+      debugLog('玩家重新加入（替换旧记录）:', { id, name, roomId: this.roomId, players: this.players.length, status: this.status });
+      return { success: true };
     }
     
     // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
@@ -208,8 +229,19 @@ class Game {
 
   removePlayer(clientId) {
     const initialLength = this.players.length;
+    debugLog('开始移除玩家:', { 
+      clientId, 
+      roomId: this.roomId, 
+      initialPlayersCount: initialLength,
+      currentStatus: this.status,
+      gameStarted: this.gameStarted,
+      players: this.players.map(p => ({ id: p.id, name: p.name }))
+    });
     this.players = this.players.filter(p => p.id !== clientId);
-    if (this.players.length === 0) return null;
+    if (this.players.length === 0) {
+      debugLog('房间清空，返回null');
+      return null;
+    }
     
     // 处理不同状态下的玩家移除逻辑
     if (this.status === 'settingPoison' && this.players.length < this.playerCount) {
