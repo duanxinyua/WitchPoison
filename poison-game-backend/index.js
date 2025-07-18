@@ -36,11 +36,27 @@ class Game {
   }
 
   addPlayer(id, name) {
+    debugLog('尝试加入房间:', { 
+      roomId: this.roomId, 
+      playerId: id, 
+      playerName: name,
+      currentStatus: this.status,
+      gameStarted: this.gameStarted,
+      currentPlayers: this.players.length,
+      maxPlayers: this.playerCount
+    });
     // 修复：如果游戏已开始但处于等待重启状态，允许原玩家重新加入
     if (this.players.length >= this.playerCount && this.status !== 'waitingForRestart') {
       return { success: false, message: '房间已满' };
     }
     if (this.gameStarted && this.status !== 'waitingForRestart' && this.status !== 'ended') {
+      debugLog('拒绝加入 - 游戏进行中:', { 
+        gameStarted: this.gameStarted, 
+        status: this.status, 
+        roomId: this.roomId, 
+        playerId: id,
+        playerName: name
+      });
       return { success: false, message: '游戏进行中，无法加入' };
     }
     if (!id || !name || typeof name !== 'string' || name.length > 20) {
@@ -147,6 +163,8 @@ class Game {
     const result = this.checkGameEnd();
     if (result) {
       this.status = 'ended';
+      this.gameStarted = false; // 重要：游戏结束时重置gameStarted标志
+      debugLog('游戏结束，重置gameStarted:', { roomId: this.roomId, result, gameStarted: this.gameStarted });
     }
 
     debugLog('翻转格子成功:', { playerId, x, y, isPoison, roomId: this.roomId });
@@ -401,6 +419,12 @@ wss.on('connection', (ws, req) => {
 
         game.status = 'waitingForRestart';
         game.gameStarted = false; // 重要：重置游戏开始标志，允许玩家重新加入
+        debugLog('重启请求：设置状态为waitingForRestart', { 
+          roomId: roomId, 
+          gameStarted: game.gameStarted, 
+          status: game.status,
+          playersCount: game.players.length
+        });
         broadcast(roomId, {
           type: 'restartRequest',
           restartCount: roomRequests.size,
