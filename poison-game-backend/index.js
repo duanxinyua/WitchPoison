@@ -400,6 +400,7 @@ wss.on('connection', (ws, req) => {
         debugLog('玩家请求重启:', { clientId, roomId, restartCount: roomRequests.size });
 
         game.status = 'waitingForRestart';
+        game.gameStarted = false; // 重要：重置游戏开始标志，允许玩家重新加入
         broadcast(roomId, {
           type: 'restartRequest',
           restartCount: roomRequests.size,
