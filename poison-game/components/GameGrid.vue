@@ -114,8 +114,8 @@ export default {
 .grid {
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
-  padding: 20rpx;
+  gap: 4rpx;
+  padding: 15rpx;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10rpx);
   border-radius: 20rpx;
@@ -123,8 +123,9 @@ export default {
   border: 1rpx solid rgba(255, 255, 255, 0.3);
   animation: gridAppear 0.5s ease;
   width: 100%;
-  max-width: 100vw;
+  max-width: calc(100vw - 60rpx);
   overflow: hidden;
+  margin: 0 auto;
 }
 
 /* 网格出现动画 */
@@ -143,19 +144,19 @@ export default {
 .row {
   display: flex;
   flex-direction: row !important;
-  gap: 6rpx;
+  gap: 4rpx;
   justify-content: center;
 }
 
 /* 游戏单元格 - 现代化设计和交互效果 */
 .cell {
   /* 响应式尺寸计算 - 根据屏幕宽度和棋盘大小自适应 */
-  width: calc((100vw - 120rpx) / var(--board-size, 5));
-  height: calc((100vw - 120rpx) / var(--board-size, 5));
-  max-width: 80rpx;
-  max-height: 80rpx;
-  min-width: 50rpx;
-  min-height: 50rpx;
+  width: calc((100vw - 150rpx) / var(--board-size, 5));
+  height: calc((100vw - 150rpx) / var(--board-size, 5));
+  max-width: 70rpx;
+  max-height: 70rpx;
+  min-width: 40rpx;
+  min-height: 40rpx;
   
   /* 外观样式 */
   border: 2rpx solid rgba(0, 122, 255, 0.2);
@@ -176,7 +177,7 @@ export default {
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
   
   /* 文字样式 */
-  font-size: 32rpx;
+  font-size: calc(20rpx + 2vw);
   font-weight: 600;
   color: #2c3e50;
 }
@@ -281,34 +282,36 @@ export default {
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
 }
 
-/* 响应式设计 - 针对不同屏幕尺寸调整 */
+/* 响应式设计 - 针对不同屏幕尺寸和棋盘大小调整 */
 @media screen and (max-width: 750rpx) {
+  .grid {
+    padding: 10rpx;
+    gap: 3rpx;
+  }
+  
+  .row {
+    gap: 3rpx;
+  }
+  
   .cell {
-    font-size: 24rpx;
     border-radius: 8rpx;
-  }
-  
-  .cell.poison {
-    font-size: 28rpx;
-  }
-  
-  .cell.poison-hint text {
-    font-size: 22rpx;
+    border-width: 1rpx;
   }
 }
 
 @media screen and (min-width: 1200rpx) {
+  .grid {
+    padding: 20rpx;
+    gap: 6rpx;
+  }
+  
+  .row {
+    gap: 6rpx;
+  }
+  
   .cell {
-    font-size: 32rpx;
     border-radius: 15rpx;
-  }
-  
-  .cell.poison {
-    font-size: 36rpx;
-  }
-  
-  .cell.poison-hint text {
-    font-size: 30rpx;
+    border-width: 3rpx;
   }
 }
 </style>
