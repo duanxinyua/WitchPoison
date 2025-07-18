@@ -1,5 +1,5 @@
 <template>
-  <view class="grid">
+  <view class="grid" :style="{ '--board-size': boardSize }">
     <view v-for="(row, rowIndex) in board" :key="`row-${rowIndex}`" class="row">
       <view
         v-for="(cell, colIndex) in row"
@@ -49,6 +49,11 @@ export default {
     status: {
       type: String,
       default: 'waiting',
+    },
+  },
+  computed: {
+    boardSize() {
+      return this.board.length || 5;
     },
   },
   data() {
@@ -109,14 +114,17 @@ export default {
 .grid {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
-  padding: 25rpx;
+  gap: 6rpx;
+  padding: 20rpx;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10rpx);
   border-radius: 20rpx;
   box-shadow: 0 15rpx 35rpx rgba(0, 0, 0, 0.1);
   border: 1rpx solid rgba(255, 255, 255, 0.3);
   animation: gridAppear 0.5s ease;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 /* 网格出现动画 */
@@ -135,23 +143,23 @@ export default {
 .row {
   display: flex;
   flex-direction: row !important;
-  gap: 8rpx;
+  gap: 6rpx;
   justify-content: center;
 }
 
 /* 游戏单元格 - 现代化设计和交互效果 */
 .cell {
-  /* 响应式尺寸计算 - 根据屏幕宽度自适应 */
-  width: calc((100vw - 120rpx) / 5);
-  height: calc((100vw - 120rpx) / 5);
-  max-width: 120rpx;
-  max-height: 120rpx;
-  min-width: 80rpx;
-  min-height: 80rpx;
+  /* 响应式尺寸计算 - 根据屏幕宽度和棋盘大小自适应 */
+  width: calc((100vw - 120rpx) / var(--board-size, 5));
+  height: calc((100vw - 120rpx) / var(--board-size, 5));
+  max-width: 80rpx;
+  max-height: 80rpx;
+  min-width: 50rpx;
+  min-height: 50rpx;
   
   /* 外观样式 */
-  border: 3rpx solid rgba(0, 122, 255, 0.2);
-  border-radius: 15rpx;
+  border: 2rpx solid rgba(0, 122, 255, 0.2);
+  border-radius: 12rpx;
   background: linear-gradient(135deg, #ffffff, #f8fbff);
   
   /* 布局和排版 */
@@ -165,8 +173,7 @@ export default {
   cursor: pointer;
   
   /* 阴影效果 */
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05),
-              inset 0 1rpx 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
   
   /* 文字样式 */
   font-size: 32rpx;
@@ -176,16 +183,15 @@ export default {
 
 /* 单元格悬停效果（适用于支持的平台） */
 .cell:hover {
-  transform: translateY(-4rpx) scale(1.05);
+  transform: translateY(-2rpx) scale(1.02);
   border-color: #007aff;
-  box-shadow: 0 8rpx 25rpx rgba(0, 122, 255, 0.15),
-              inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4rpx 15rpx rgba(0, 122, 255, 0.1);
   background: linear-gradient(135deg, #ffffff, #e3f2fd);
 }
 
 /* 单元格点击效果 */
 .cell:active {
-  transform: translateY(-2rpx) scale(1.02);
+  transform: translateY(-1rpx) scale(1.01);
   transition: all 0.1s ease;
 }
 
@@ -228,8 +234,7 @@ export default {
 
 .cell.disabled:hover {
   transform: none;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05),
-              inset 0 1rpx 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   border-color: #dee2e6;
 }
@@ -279,25 +284,31 @@ export default {
 /* 响应式设计 - 针对不同屏幕尺寸调整 */
 @media screen and (max-width: 750rpx) {
   .cell {
-    width: calc((100vw - 100rpx) / 5);
-    height: calc((100vw - 100rpx) / 5);
-    font-size: 28rpx;
+    font-size: 24rpx;
+    border-radius: 8rpx;
   }
   
   .cell.poison {
-    font-size: 32rpx;
+    font-size: 28rpx;
+  }
+  
+  .cell.poison-hint text {
+    font-size: 22rpx;
   }
 }
 
 @media screen and (min-width: 1200rpx) {
   .cell {
-    width: 140rpx;
-    height: 140rpx;
-    font-size: 36rpx;
+    font-size: 32rpx;
+    border-radius: 15rpx;
   }
   
   .cell.poison {
-    font-size: 40rpx;
+    font-size: 36rpx;
+  }
+  
+  .cell.poison-hint text {
+    font-size: 30rpx;
   }
 }
 </style>

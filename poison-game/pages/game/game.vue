@@ -510,6 +510,12 @@ export default {
     }
     closeWebSocket();
   },
+  onBackPress() {
+    // 拦截返回按钮，直接返回首页
+    console.log('拦截返回按钮');
+    this.goBackHome();
+    return true; // 阻止默认返回行为
+  },
 };
 </script>
 

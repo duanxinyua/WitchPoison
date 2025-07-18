@@ -11,6 +11,12 @@
             "style": {
                 "navigationBarTitleText": "游戏"
             }
+        },
+        {
+            "path": "pages/avatar/avatar",
+            "style": {
+                "navigationBarTitleText": "选择头像"
+            }
         }
     ],
     "globalStyle": {

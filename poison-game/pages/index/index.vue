@@ -3,7 +3,14 @@
     <view class="title">女巫的毒药</view>
     <view class="nickname-section">
       <view v-if="nicknameSaved" class="nickname-display">
-        <text>欢迎，{{ nickname }}</text>
+        <view class="user-info">
+          <text class="user-avatar">{{ userAvatar }}</text>
+          <text class="user-name">{{ nickname }}</text>
+        </view>
+        <view class="user-actions">
+          <button @click="goToAvatarPage" class="edit-btn">修改头像</button>
+          <button @click="editNickname" class="edit-btn">修改昵称</button>
+        </view>
       </view>
       <view v-else class="nickname-input">
         <input v-model="nickname" placeholder="请输入你的昵称" class="input" />
@@ -68,6 +75,7 @@ export default {
     return {
       nickname: uni.getStorageSync('nickname') || '',
       nicknameSaved: !!uni.getStorageSync('nickname'),
+      userAvatar: uni.getStorageSync('userAvatar') || '😺',
       showCreateRoomModal: false,
       showJoinRoomModal: false,
       roomId: '',
@@ -88,7 +96,37 @@ export default {
       }
       uni.setStorageSync('nickname', this.nickname.trim());
       this.nicknameSaved = true;
-      this.initWebSocket();
+      
+      // 检查是否已选择头像，如果没有则提示选择
+      if (!this.userAvatar || this.userAvatar === '😺') {
+        uni.showModal({
+          title: '选择头像',
+          content: '请选择一个头像作为你的游戏形象',
+          confirmText: '去选择',
+          cancelText: '使用默认',
+          success: (res) => {
+            if (res.confirm) {
+              this.goToAvatarPage();
+            } else {
+              uni.setStorageSync('userAvatar', '😺');
+              this.userAvatar = '😺';
+              this.initWebSocket();
+            }
+          }
+        });
+      } else {
+        this.initWebSocket();
+      }
+    },
+    goToAvatarPage() {
+      uni.navigateTo({
+        url: '/pages/avatar/avatar'
+      });
+    },
+    editNickname() {
+      this.nicknameSaved = false;
+      this.nickname = '';
+      uni.removeStorageSync('nickname');
     },
     openCreateRoomModal() {
       console.log('打开创建房间模态框');
@@ -399,6 +437,10 @@ export default {
       this.initWebSocket();
     }
   },
+  onShow() {
+    // 页面显示时更新头像
+    this.userAvatar = uni.getStorageSync('userAvatar') || '😺';
+  },
   onUnload() {
     console.log('首页卸载');
     if (this.removeMessageCallback) {
@@ -478,11 +520,47 @@ export default {
   padding: 20rpx;
 }
 
-.nickname-display text {
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20rpx;
+  gap: 15rpx;
+}
+
+.user-avatar {
+  font-size: 64rpx;
+  line-height: 1;
+}
+
+.user-name {
   font-size: 40rpx;
   font-weight: 600;
   color: #2c3e50;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+}
+
+.user-actions {
+  display: flex;
+  gap: 15rpx;
+  justify-content: center;
+}
+
+.edit-btn {
+  background: linear-gradient(135deg, #42a5f5, #26c6da);
+  color: white;
+  border: none;
+  border-radius: 20rpx;
+  padding: 15rpx 30rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 12rpx rgba(66, 165, 245, 0.3);
+  transition: all 0.3s ease;
+}
+
+.edit-btn:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 6rpx 15rpx rgba(66, 165, 245, 0.4);
 }
 
 /* 昵称输入区域 */
