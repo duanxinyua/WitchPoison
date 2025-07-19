@@ -134,6 +134,24 @@ export default {
             uni.showToast({ title: '房间创建成功', icon: 'success' });
             this.updateGameState(data);
           } else if (data.type === 'playerJoined') {
+            console.log('处理 playerJoined，检查是否需要重置游戏状态:', {
+              status: data.state.status,
+              gameStarted: data.state.gameStarted,
+              playersCount: data.state.players?.length,
+              currentBoard: this.board?.length
+            });
+            
+            // 如果状态回到 waiting，确保完全重置游戏状态
+            if (data.state.status === 'waiting' && this.status !== 'waiting') {
+              console.log('状态从', this.status, '变为 waiting，强制重置游戏状态');
+              // 重置所有游戏相关状态
+              this.gameResult = null;
+              this.isFlipping = false;
+              this.isSettingPoison = false;
+              this.restartRequested = false;
+              this.restartCount = 0;
+            }
+            
             this.updateGameState(data);
             uni.showToast({ title: '玩家加入房间', icon: 'success' });
             uni.hideLoading();

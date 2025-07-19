@@ -98,11 +98,25 @@ class Game {
       });
       
       // 重要：替换记录后也需要检查房间状态是否需要更新
-      // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
-      if ((this.status === 'waitingForRestart' || this.status === 'ended') && this.players.length < this.playerCount) {
+      // 如果房间在等待重启状态或游戏结束状态，重置游戏状态
+      if (this.status === 'waitingForRestart' || this.status === 'ended') {
         this.status = 'waiting';
-        this.gameStarted = false; // 重要：重置游戏开始标志
-        debugLog('替换记录后房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted, oldStatus: this.status });
+        this.gameStarted = false;
+        // 重置棋盘
+        this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+        // 重置所有玩家状态
+        this.players.forEach(player => {
+          player.poisonPos = null;
+          player.isOut = false;
+        });
+        this.currentPlayerIndex = 0;
+        debugLog('玩家重新加入时重置游戏状态:', { 
+          roomId: this.roomId, 
+          playersCount: this.players.length, 
+          gameStarted: this.gameStarted, 
+          status: this.status,
+          boardReset: this.board.every(row => row.every(cell => cell === null))
+        });
       }
       
       // 更新房间状态逻辑
@@ -119,11 +133,25 @@ class Game {
       return { success: true };
     }
     
-    // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
-    if ((this.status === 'waitingForRestart' || this.status === 'ended') && this.players.length < this.playerCount) {
+    // 如果房间在等待重启状态或游戏结束状态，重置游戏状态
+    if (this.status === 'waitingForRestart' || this.status === 'ended') {
       this.status = 'waiting';
-      this.gameStarted = false; // 重要：重置游戏开始标志
-      debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted, oldStatus: this.status });
+      this.gameStarted = false;
+      // 重置棋盘
+      this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+      // 重置所有玩家状态
+      this.players.forEach(player => {
+        player.poisonPos = null;
+        player.isOut = false;
+      });
+      this.currentPlayerIndex = 0;
+      debugLog('新玩家加入时重置游戏状态:', { 
+        roomId: this.roomId, 
+        playersCount: this.players.length, 
+        gameStarted: this.gameStarted, 
+        status: this.status,
+        boardReset: this.board.every(row => row.every(cell => cell === null))
+      });
     }
     
     // 获取已使用的头像列表
@@ -319,10 +347,18 @@ class Game {
       if (this.players.length < this.playerCount) {
         this.status = 'waiting';
         this.gameStarted = false;
+        // 重置棋盘和玩家状态
+        this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+        this.players.forEach(player => {
+          player.poisonPos = null;
+          player.isOut = false;
+        });
+        this.currentPlayerIndex = 0;
         debugLog('游戏中玩家退出导致人数不足，重置游戏状态:', { 
           roomId: this.roomId, 
           playersLeft: this.players.length, 
-          requiredPlayers: this.playerCount 
+          requiredPlayers: this.playerCount,
+          boardReset: this.board.every(row => row.every(cell => cell === null))
         });
       } else if (this.players[this.currentPlayerIndex]?.id === clientId) {
         this.nextTurn();
@@ -334,13 +370,20 @@ class Game {
       // 如果还有足够玩家，保持waitingForRestart状态；否则重置为waiting
       if (this.players.length < this.playerCount) {
         this.status = 'waiting';
-        this.gameStarted = false; // 重要：重置游戏开始标志
-        // 清除该房间的重启请求记录
-        debugLog('清除重启请求记录，重置游戏状态:', { 
+        this.gameStarted = false;
+        // 重置棋盘和玩家状态
+        this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+        this.players.forEach(player => {
+          player.poisonPos = null;
+          player.isOut = false;
+        });
+        this.currentPlayerIndex = 0;
+        debugLog('等待重启状态重置游戏:', { 
           roomId: this.roomId, 
           gameStarted: this.gameStarted,
           playersLeft: this.players.length,
-          requiredPlayers: this.playerCount
+          requiredPlayers: this.playerCount,
+          boardReset: this.board.every(row => row.every(cell => cell === null))
         });
       }
     }
@@ -348,8 +391,20 @@ class Game {
     // 修复：游戏结束状态下人数不足时重置为等待
     if (this.status === 'ended' && this.players.length < this.playerCount) {
       this.status = 'waiting';
-      this.gameStarted = false; // 重要：重置游戏开始标志
-      debugLog('游戏结束状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted });
+      this.gameStarted = false;
+      // 重置棋盘和玩家状态
+      this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+      this.players.forEach(player => {
+        player.poisonPos = null;
+        player.isOut = false;
+      });
+      this.currentPlayerIndex = 0;
+      debugLog('游戏结束状态重置为等待:', { 
+        roomId: this.roomId, 
+        playersCount: this.players.length, 
+        gameStarted: this.gameStarted,
+        boardReset: this.board.every(row => row.every(cell => cell === null))
+      });
     }
     
     debugLog('玩家移除:', { clientId, roomId: this.roomId, remainingPlayers: this.players.length, newStatus: this.status });
