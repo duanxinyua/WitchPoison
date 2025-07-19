@@ -76,9 +76,14 @@ export default {
       }
     },
     showPoisonHint(row, col) {
-      // 只在设置毒药阶段显示自己的毒药位置
-      if (this.status === 'settingPoison' && this.currentPlayerPoison) {
-        return this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
+      // 只在设置毒药阶段显示自己的毒药位置，且确保毒药位置不为空
+      if (this.status === 'settingPoison' && this.currentPlayerPoison && 
+          this.currentPlayerPoison.x !== null && this.currentPlayerPoison.y !== null) {
+        const shouldShow = this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
+        if (shouldShow) {
+          console.log('显示毒药提示:', { row, col, currentPlayerPoison: this.currentPlayerPoison, status: this.status });
+        }
+        return shouldShow;
       }
       return false;
     },

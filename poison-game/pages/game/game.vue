@@ -71,9 +71,10 @@ export default {
         this.cleanupAndGoHome();
         return;
       }
-      if (!this.board.length) {
+      // 初始化空棋盘时不要强制创建，等待从服务器获取正确的尺寸
+      if (!this.board.length && this.boardSize > 0) {
         this.$set(this, 'board', Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
-        console.log('初始化空棋盘:', this.board);
+        console.log('初始化空棋盘:', { boardSize: this.boardSize, board: this.board });
       }
       if (this.hasJoined || this.players.some(p => p.id === this.clientId)) {
         console.log('玩家已加入房间，跳过 join 请求:', { clientId: this.clientId, roomId: this.roomId });
@@ -188,10 +189,17 @@ export default {
             this.gameResult = null; // 重置 gameResult
             this.hasJoined = true;
             
-            // 强制重置棋盘为空
-            console.log('重置前棋盘状态:', JSON.parse(JSON.stringify(this.board)));
-            this.$set(this, 'board', Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
-            console.log('重置后棋盘状态:', JSON.parse(JSON.stringify(this.board)));
+            // 首先从消息中获取正确的棋盘尺寸
+            const correctBoardSize = data.state.boardSize || data.boardSize || this.boardSize;
+            if (correctBoardSize !== this.boardSize) {
+              console.log('gameRestarted: 更新棋盘尺寸:', this.boardSize, '->', correctBoardSize);
+              this.$set(this, 'boardSize', correctBoardSize);
+            }
+            
+            // 强制重置棋盘为空，使用正确的尺寸
+            console.log('重置前棋盘状态:', { size: this.board.length, board: JSON.parse(JSON.stringify(this.board)) });
+            this.$set(this, 'board', Array(correctBoardSize).fill().map(() => Array(correctBoardSize).fill(null)));
+            console.log('重置后棋盘状态:', { size: correctBoardSize, board: JSON.parse(JSON.stringify(this.board)) });
             
             this.updateGameState(data);
             uni.hideLoading();
@@ -268,16 +276,23 @@ export default {
         uni.hideLoading();
         return;
       }
+      // 首先更新 boardSize，这样后续的棋盘创建会使用正确的尺寸
+      const newBoardSize = data.state.boardSize || data.boardSize || this.boardSize;
+      if (newBoardSize !== this.boardSize) {
+        console.log('更新棋盘尺寸:', this.boardSize, '->', newBoardSize);
+        this.$set(this, 'boardSize', newBoardSize);
+      }
+      
       // 强制重置棋盘：在waiting、settingPoison状态或gameRestarted时清空棋盘
       const shouldResetBoard = data.type === 'gameRestarted' || 
                               data.state.status === 'waiting' || 
                               data.state.status === 'settingPoison';
       
       const newBoard = shouldResetBoard 
-        ? Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null))
+        ? Array(newBoardSize).fill().map(() => Array(newBoardSize).fill(null))
         : (Array.isArray(data.state.board) && data.state.board.every(row => Array.isArray(row))
             ? JSON.parse(JSON.stringify(data.state.board))
-            : Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
+            : Array(newBoardSize).fill().map(() => Array(newBoardSize).fill(null)));
       this.$set(this, 'board', newBoard);
       // 强制重置玩家状态：在重启、等待或设置毒药状态下完全清理玩家状态
       const shouldResetPlayerStates = data.type === 'gameRestarted' || 
@@ -295,9 +310,6 @@ export default {
       this.$set(this, 'gameStarted', data.state.gameStarted || false);
       this.$set(this, 'status', data.state.status || 'waiting');
       this.$set(this, 'playerCount', data.state.playerCount || data.playerCount || this.players.length);
-      if (data.state.boardSize || data.boardSize) {
-        this.$set(this, 'boardSize', data.state.boardSize || data.boardSize);
-      }
       if (data.gameResult) {
         this.$set(this, 'gameResult', data.gameResult);
       } else if (data.type === 'gameRestarted') {

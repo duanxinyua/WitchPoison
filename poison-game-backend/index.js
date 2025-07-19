@@ -126,7 +126,23 @@ class Game {
       debugLog('房间状态重置为等待:', { roomId: this.roomId, playersCount: this.players.length, gameStarted: this.gameStarted, oldStatus: this.status });
     }
     
-    const emoji = this.emojis[this.players.length % this.emojis.length];
+    // 获取已使用的头像列表
+    const usedEmojis = this.players.map(p => p.emoji);
+    // 找到第一个未使用的头像
+    let emoji = this.emojis.find(e => !usedEmojis.includes(e));
+    // 如果所有头像都被使用了，回到循环分配
+    if (!emoji) {
+      emoji = this.emojis[this.players.length % this.emojis.length];
+    }
+    
+    debugLog('为新玩家分配头像:', { 
+      playerId: id, 
+      playerName: name, 
+      assignedEmoji: emoji, 
+      usedEmojis, 
+      availableEmojis: this.emojis 
+    });
+    
     this.players.push({ id, name, emoji, poisonPos: null, isOut: false, clientId: id });
     
     // 更新房间状态逻辑
