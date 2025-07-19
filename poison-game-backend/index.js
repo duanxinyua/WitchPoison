@@ -358,7 +358,16 @@ class Game {
       this.gameStarted = true;
       this.status = 'playing';
       this.currentPlayerIndex = 0;
-      debugLog('游戏开始:', { roomId: this.roomId, players: this.players, currentPlayerIndex: this.currentPlayerIndex });
+      // 确保第一个玩家状态正确
+      if (this.players.length > 0) {
+        this.players[0].isOut = false;
+      }
+      debugLog('游戏开始:', { 
+        roomId: this.roomId, 
+        players: this.players.map(p => ({ id: p.id, name: p.name, isOut: p.isOut, poisonPos: !!p.poisonPos })), 
+        currentPlayerIndex: this.currentPlayerIndex,
+        currentPlayer: this.players[this.currentPlayerIndex]
+      });
       return true;
     }
     debugLog('无法开始游戏，毒药未全部设置:', { roomId: this.roomId, players: this.players });
@@ -531,7 +540,12 @@ wss.on('connection', (ws, req) => {
 
         if (roomRequests.size >= game.players.length) {
           game.restart();
-          debugLog('游戏重启:', { roomId });
+          debugLog('游戏重启完成，广播重启消息:', { 
+            roomId,
+            playersAfterRestart: game.players.map(p => ({ id: p.id, name: p.name, isOut: p.isOut, poisonPos: p.poisonPos })),
+            currentPlayerIndex: game.currentPlayerIndex,
+            status: game.status
+          });
           restartRequests.delete(roomId);
           broadcast(roomId, { type: 'gameRestarted', state: game.getState(), players: game.players });
         }
