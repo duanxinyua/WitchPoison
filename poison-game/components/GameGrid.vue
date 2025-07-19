@@ -29,7 +29,8 @@ export default {
     board: {
       type: Array,
       required: true,
-      validator: (board) => Array.isArray(board) && board.every(row => Array.isArray(row)),
+      default: () => [],
+      validator: (board) => Array.isArray(board) && (board.length === 0 || board.every(row => Array.isArray(row))),
     },
     gameStarted: {
       type: Boolean,
@@ -54,12 +55,12 @@ export default {
   },
   computed: {
     boardSize() {
-      return this.board.length || 5;
+      return (this.board && Array.isArray(this.board)) ? this.board.length || 5 : 5;
     },
   },
   data() {
     return {
-      isMounted: true,
+      isMounted: false,
     };
   },
   methods: {
@@ -76,36 +77,67 @@ export default {
       }
     },
     showPoisonHint(row, col) {
-      // 只在设置毒药阶段显示自己的毒药位置，且确保毒药位置不为空
+      // 只在设置毒药阶段显示自己的毒药位置
       if (this.status === 'settingPoison' && this.currentPlayerPoison && 
-          this.currentPlayerPoison.x !== null && this.currentPlayerPoison.y !== null) {
+          typeof this.currentPlayerPoison.x === 'number' && 
+          typeof this.currentPlayerPoison.y === 'number') {
         const shouldShow = this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
-        if (shouldShow) {
-          console.log('显示毒药提示:', { row, col, currentPlayerPoison: this.currentPlayerPoison, status: this.status });
-        }
+        console.log('检查毒药提示:', { 
+          row, 
+          col, 
+          currentPlayerPoison: this.currentPlayerPoison, 
+          status: this.status, 
+          shouldShow 
+        });
         return shouldShow;
       }
+      
+      // 调试：记录为什么不显示毒药提示
+      if (this.status === 'settingPoison') {
+        console.log('设置毒药阶段但不显示提示:', {
+          row,
+          col,
+          status: this.status,
+          currentPlayerPoison: this.currentPlayerPoison,
+          hasPoison: !!this.currentPlayerPoison,
+          poisonX: this.currentPlayerPoison?.x,
+          poisonY: this.currentPlayerPoison?.y
+        });
+      }
+      
       return false;
     },
   },
   watch: {
     board: {
       handler(newBoard) {
+        if (!Array.isArray(newBoard)) {
+          console.warn('GameGrid 收到无效的board数据:', newBoard);
+          return;
+        }
         console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)));
-        // 强制更新组件
-        this.$forceUpdate();
+        // 安全地强制更新组件
+        this.$nextTick(() => {
+          try {
+            if (this.isMounted && this.$el) {
+              this.$forceUpdate();
+            }
+          } catch (error) {
+            console.warn('GameGrid forceUpdate 失败:', error);
+          }
+        });
       },
       deep: true,
-      immediate: true,
+      immediate: false, // 改为false避免初始化时的问题
     },
     gameStarted(newVal) {
-      console.log('GameGrid gameStarted ����:', newVal);
+      console.log('GameGrid gameStarted 更新:', newVal);
     },
     poisonSet(newVal) {
-      console.log('GameGrid poisonSet ����:', newVal);
+      console.log('GameGrid poisonSet 更新:', newVal);
     },
     gameResult(newVal) {
-      console.log('GameGrid gameResult ����:', newVal);
+      console.log('GameGrid gameResult 更新:', newVal);
     },
   },
   onLoad() {
@@ -113,6 +145,14 @@ export default {
   },
   onShow() {
     console.log('GameGrid onShow');
+    this.isMounted = true;
+  },
+  onReady() {
+    console.log('GameGrid onReady');
+    this.isMounted = true;
+  },
+  mounted() {
+    console.log('GameGrid mounted');
     this.isMounted = true;
   },
 };

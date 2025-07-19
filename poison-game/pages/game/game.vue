@@ -301,10 +301,9 @@ export default {
         this.$set(this, 'boardSize', newBoardSize);
       }
       
-      // 强制重置棋盘：在waiting、settingPoison状态或gameRestarted时清空棋盘
+      // 强制重置棋盘：只在重启和等待状态时清空棋盘，设置毒药阶段保持棋盘状态
       const shouldResetBoard = data.type === 'gameRestarted' || 
-                              data.state.status === 'waiting' || 
-                              data.state.status === 'settingPoison';
+                              data.state.status === 'waiting';
       
       const newBoard = shouldResetBoard 
         ? Array(newBoardSize).fill().map(() => Array(newBoardSize).fill(null))
@@ -312,10 +311,9 @@ export default {
             ? JSON.parse(JSON.stringify(data.state.board))
             : Array(newBoardSize).fill().map(() => Array(newBoardSize).fill(null)));
       this.$set(this, 'board', newBoard);
-      // 强制重置玩家状态：在重启、等待或设置毒药状态下完全清理玩家状态
+      // 强制重置玩家状态：只在重启和等待状态下重置，设置毒药阶段需要保留玩家的毒药位置
       const shouldResetPlayerStates = data.type === 'gameRestarted' || 
-                                     data.state.status === 'waiting' || 
-                                     data.state.status === 'settingPoison';
+                                     data.state.status === 'waiting';
       
       this.$set(this, 'players', Array.isArray(data.state.players) ? data.state.players.map(p => ({
         ...p,

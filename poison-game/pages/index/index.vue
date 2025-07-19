@@ -1,23 +1,19 @@
 <template>
   <view class="index">
     <view class="title">女巫的毒药</view>
-    <view class="nickname-section">
-      <view v-if="nicknameSaved" class="nickname-display">
-        <view class="user-info">
-          <text class="user-avatar">{{ userAvatar }}</text>
-          <text class="user-name">{{ nickname }}</text>
+    <view class="user-section">
+      <view class="user-info">
+        <view class="user-details">
+          <view class="user-name-row">
+            <text class="user-name">{{ nickname }}</text>
+            <text class="user-avatar">{{ userAvatar }}</text>
+          </view>
+          <text class="user-status">{{ nicknameSaved ? '已设置昵称' : '游客模式' }}</text>
         </view>
-        <view class="user-actions">
-          <button @click="goToAvatarPage" class="edit-btn">修改头像</button>
-          <button @click="editNickname" class="edit-btn">修改昵称</button>
-        </view>
-      </view>
-      <view v-else class="nickname-input">
-        <input v-model="nickname" placeholder="请输入你的昵称" class="input" />
-        <button @click="saveNickname">保存昵称</button>
+        <button @click="openNicknameModal" class="customize-btn">个性化</button>
       </view>
     </view>
-    <view v-if="nicknameSaved" class="room-section">
+    <view class="room-section">
       <view class="room-actions">
         <button :disabled="isCreating" @click="openCreateRoomModal">创建房间</button>
         <button @click="openJoinRoomModal">加入房间</button>
@@ -60,7 +56,32 @@
         </view>
         <view class="form-actions">
           <button @click="joinRoom">确定</button>
-          <button @click="showJoinRoomModal = false">取消</button>
+          <button @click="closeJoinRoomModal">取消</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 个性化设置模态框 -->
+    <view v-if="showNicknameModal" class="modal-overlay">
+      <view class="customize-form">
+        <view class="form-title">个性化设置</view>
+        <view class="form-item">
+          <text class="form-label">昵称</text>
+          <input v-model="tempNickname" placeholder="请输入你的昵称" class="input-field" />
+        </view>
+        <view class="form-item">
+          <text class="form-label">头像</text>
+          <view class="avatar-selector">
+            <text class="current-avatar">{{ userAvatar }}</text>
+            <button @click="goToAvatarPage" class="avatar-btn">选择头像</button>
+          </view>
+        </view>
+        <view class="form-actions">
+          <button @click="saveCustomization">保存设置</button>
+          <button @click="closeNicknameModal">跳过</button>
+        </view>
+        <view class="form-tip">
+          <text>💡 您可以先体验游戏，稍后再设置个性化信息</text>
         </view>
       </view>
     </view>
@@ -72,12 +93,40 @@ import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '..
 
 export default {
   data() {
+    // 初始化默认昵称和头像，确保第一次使用时就保存到本地
+    let nickname = uni.getStorageSync('nickname');
+    let userAvatar = uni.getStorageSync('userAvatar');
+    let isFirstTime = false;
+    
+    // 检查是否手动设置过昵称
+    const manuallySet = uni.getStorageSync('manuallySetNickname') === 'true';
+    
+    // 如果没有昵称，生成默认昵称并保存
+    if (!nickname) {
+      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
+      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
+      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+      const randomNum = Math.floor(Math.random() * 999) + 1;
+      nickname = `${randomAdj}${randomNoun}${randomNum}`;
+      uni.setStorageSync('nickname', nickname);
+      isFirstTime = true;
+    }
+    
+    // 如果没有头像，设置默认头像并保存
+    if (!userAvatar) {
+      userAvatar = '😺';
+      uni.setStorageSync('userAvatar', userAvatar);
+      isFirstTime = true;
+    }
+    
     return {
-      nickname: uni.getStorageSync('nickname') || '',
-      nicknameSaved: !!uni.getStorageSync('nickname'),
-      userAvatar: uni.getStorageSync('userAvatar') || '😺',
+      nickname: nickname,
+      nicknameSaved: manuallySet, // 根据是否手动设置过来标记
+      userAvatar: userAvatar,
       showCreateRoomModal: false,
       showJoinRoomModal: false,
+      showNicknameModal: false,
       roomId: '',
       boardSize: 5,
       playerCount: 2,
@@ -86,9 +135,50 @@ export default {
       removeMessageCallback: null,
       createTimeout: null,
       hasNavigated: false,
+      tempNickname: '', // 临时昵称输入
+      isFirstTime: isFirstTime, // 标记是否首次使用
     };
   },
   methods: {
+    generateGuestNickname() {
+      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
+      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
+      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+      const randomNum = Math.floor(Math.random() * 999) + 1;
+      return `${randomAdj}${randomNoun}${randomNum}`;
+    },
+    openNicknameModal() {
+      this.$set(this, 'tempNickname', this.nickname);
+      this.$set(this, 'showNicknameModal', true);
+    },
+    closeNicknameModal() {
+      this.$set(this, 'showNicknameModal', false);
+      this.$set(this, 'tempNickname', '');
+    },
+    saveCustomization() {
+      if (!this.tempNickname.trim()) {
+        uni.showToast({ title: '请输入昵称', icon: 'error' });
+        return;
+      }
+      
+      // 保存昵称和头像
+      uni.setStorageSync('nickname', this.tempNickname.trim());
+      uni.setStorageSync('userAvatar', this.userAvatar); // 确保头像也被保存
+      uni.setStorageSync('manuallySetNickname', 'true'); // 标记为手动设置
+      this.$set(this, 'nickname', this.tempNickname.trim());
+      this.$set(this, 'nicknameSaved', true);
+      this.$set(this, 'isFirstTime', false);
+      
+      // 关闭模态框
+      this.closeNicknameModal();
+      uni.showToast({ title: '个性化设置已保存', icon: 'success' });
+      
+      // 初始化WebSocket连接
+      if (!this.clientId) {
+        this.initWebSocket();
+      }
+    },
     saveNickname() {
       if (!this.nickname.trim()) {
         uni.showToast({ title: '请输入昵称', icon: 'error' });
@@ -138,14 +228,18 @@ export default {
     },
     openCreateRoomModal() {
       console.log('打开创建房间模态框');
-      this.showCreateRoomModal = true;
-      this.showJoinRoomModal = false;
+      this.$set(this, 'showCreateRoomModal', true);
+      this.$set(this, 'showJoinRoomModal', false);
     },
     openJoinRoomModal() {
       console.log('打开加入房间模态框');
-      this.roomId = '';
-      this.showJoinRoomModal = true;
-      this.showCreateRoomModal = false;
+      this.$set(this, 'roomId', '');
+      this.$set(this, 'showJoinRoomModal', true);
+      this.$set(this, 'showCreateRoomModal', false);
+    },
+    closeJoinRoomModal() {
+      this.$set(this, 'showJoinRoomModal', false);
+      this.$set(this, 'roomId', '');
     },
     updateBoardSize(delta) {
       const newSize = Math.max(5, Math.min(10, this.boardSize + delta));
@@ -158,10 +252,8 @@ export default {
       console.log('更新玩家人数:', newCount);
     },
     async initWebSocket() {
-      if (!this.nicknameSaved) {
-        console.log('昵称未保存，跳过 WebSocket 初始化');
-        return;
-      }
+      // 移除昵称检查，支持游客模式
+      console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
       this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       uni.setStorageSync('clientId', this.clientId);
       console.log('初始化 clientId:', this.clientId);
@@ -466,15 +558,30 @@ export default {
     console.log('首页加载');
     uni.removeStorageSync('clientId');
     this.clientId = '';
-    if (!this.nicknameSaved) {
-      uni.showToast({ title: '请先输入昵称', icon: 'error' });
+    
+    // 如果是第一次使用，显示欢迎提示
+    if (this.isFirstTime) {
+      console.log('首次使用，已自动设置默认昵称和头像:', { nickname: this.nickname, avatar: this.userAvatar });
+      setTimeout(() => {
+        uni.showToast({ 
+          title: '欢迎体验游戏！已为您设置默认信息', 
+          icon: 'success',
+          duration: 3000
+        });
+      }, 500);
     } else {
-      this.initWebSocket();
+      console.log('用户信息已存在:', { nickname: this.nickname, avatar: this.userAvatar, nicknameSaved: this.nicknameSaved });
     }
+    
+    // 直接初始化WebSocket连接，无论是否设置了昵称
+    this.initWebSocket();
   },
   onShow() {
-    // 页面显示时更新头像
-    this.userAvatar = uni.getStorageSync('userAvatar') || '😺';
+    // 页面显示时更新头像（可能在头像选择页面更改了）
+    const storedAvatar = uni.getStorageSync('userAvatar');
+    if (storedAvatar && storedAvatar !== this.userAvatar) {
+      this.$set(this, 'userAvatar', storedAvatar);
+    }
   },
   onUnload() {
     console.log('首页卸载');
@@ -535,50 +642,75 @@ export default {
   100% { background-position: 0% 50%; }
 }
 
-/* 昵称设置区域 - 卡片式设计 */
-.nickname-section {
+/* 用户信息区域 - 现代化设计 */
+.user-section {
   width: 90%;
   max-width: 500rpx;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10rpx);
   border-radius: 25rpx;
-  padding: 40rpx;
-  margin-bottom: 50rpx;
+  padding: 30rpx;
+  margin-bottom: 40rpx;
   box-shadow: 0 15rpx 35rpx rgba(0, 0, 0, 0.1);
   border: 1rpx solid rgba(255, 255, 255, 0.2);
-}
-
-/* 昵称显示 */
-.nickname-display {
-  width: 100%;
-  text-align: center;
-  padding: 20rpx;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 20rpx;
-  gap: 15rpx;
+  justify-content: space-between;
+  width: 100%;
 }
 
-.user-avatar {
-  font-size: 64rpx;
-  line-height: 1;
+.user-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
 }
 
 .user-name {
-  font-size: 40rpx;
+  font-size: 36rpx;
   font-weight: 600;
   color: #2c3e50;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  text-align: center;
 }
 
-.user-actions {
-  display: flex;
-  gap: 15rpx;
-  justify-content: center;
+.user-avatar {
+  font-size: 48rpx;
+  line-height: 1;
+}
+
+.user-status {
+  font-size: 22rpx;
+  color: #7f8c8d;
+  background: rgba(52, 152, 219, 0.1);
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
+  text-align: center;
+}
+
+.customize-btn {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border: none;
+  border-radius: 15rpx;
+  padding: 12rpx 20rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 10rpx rgba(52, 152, 219, 0.3);
+  transition: all 0.3s ease;
+  min-width: 80rpx;
+  flex-shrink: 0;
 }
 
 .edit-btn {
@@ -831,8 +963,30 @@ export default {
   display: flex;
   flex-direction: row;
   justify-content: center;
+  align-items: center;
   gap: 25rpx;
-  margin-top: 30rpx;
+  margin-top: 20rpx;
+  width: 100%;
+}
+
+/* 个性化设置表单按钮优化 */
+.customize-form .form-actions {
+  margin-top: 25rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.customize-form .form-actions button {
+  flex: 1;
+  max-width: 180rpx;
+  min-height: 80rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 20rpx;
+  padding: 22rpx 25rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 按钮统一样式优化 */
@@ -874,5 +1028,203 @@ button:disabled {
 button:last-child {
   background: linear-gradient(135deg, #6c757d, #495057);
   box-shadow: 0 8rpx 20rpx rgba(108, 117, 125, 0.3);
+}
+
+/* 个性化设置表单 */
+.customize-form {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10rpx);
+  padding: 40rpx;
+  border-radius: 25rpx;
+  width: 90%;
+  max-width: 650rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 25rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.2);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  animation: slideUp 0.3s ease;
+  margin: 0 auto;
+}
+
+/* 表单标题优化 */
+.customize-form .form-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #2c3e50;
+  text-align: center;
+  margin-bottom: 15rpx;
+  padding-bottom: 15rpx;
+  border-bottom: 2rpx solid rgba(0, 122, 255, 0.1);
+}
+
+/* 表单项优化 */
+.customize-form .form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 15rpx;
+  align-items: stretch;
+}
+
+.customize-form .form-label {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8rpx;
+  text-align: left;
+}
+
+.customize-form .input-field {
+  width: 100%;
+  min-height: 80rpx;
+  padding: 20rpx;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2rpx solid rgba(0, 122, 255, 0.2);
+  border-radius: 15rpx;
+  font-size: 30rpx;
+  color: #2c3e50;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.customize-form .input-field:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3rpx rgba(0, 122, 255, 0.1);
+  outline: none;
+}
+
+/* 头像选择器 */
+.avatar-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 15rpx 20rpx;
+  background: rgba(248, 249, 250, 0.9);
+  border-radius: 15rpx;
+  border: 2rpx solid rgba(0, 122, 255, 0.1);
+}
+
+.current-avatar {
+  font-size: 48rpx;
+  padding: 12rpx 16rpx;
+  background: rgba(52, 152, 219, 0.1);
+  border-radius: 12rpx;
+  border: 2rpx solid rgba(52, 152, 219, 0.2);
+  min-width: 80rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.avatar-btn {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  border: none;
+  border-radius: 15rpx;
+  padding: 18rpx 30rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 12rpx rgba(231, 76, 60, 0.3);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  min-width: 120rpx;
+}
+
+.avatar-btn:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 6rpx 15rpx rgba(231, 76, 60, 0.4);
+}
+
+/* 提示文本 */
+.form-tip {
+  text-align: center;
+  padding: 20rpx;
+  background: rgba(46, 204, 113, 0.1);
+  border-radius: 15rpx;
+  border: 1rpx solid rgba(46, 204, 113, 0.2);
+}
+
+.form-tip text {
+  font-size: 26rpx;
+  color: #27ae60;
+  line-height: 1.5;
+}
+
+/* 个性化按钮悬停效果 */
+.customize-btn:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 8rpx 20rpx rgba(52, 152, 219, 0.4);
+}
+
+/* 响应式设计优化 */
+@media screen and (max-width: 750rpx) {
+  .user-section {
+    width: 95%;
+    padding: 25rpx;
+  }
+  
+  .user-name {
+    font-size: 32rpx;
+  }
+  
+  .user-avatar {
+    font-size: 40rpx;
+  }
+  
+  .customize-btn {
+    padding: 10rpx 16rpx;
+    font-size: 22rpx;
+    min-width: 70rpx;
+  }
+  
+  .customize-form {
+    width: 95%;
+    padding: 30rpx;
+    max-width: none;
+  }
+  
+  .customize-form .form-actions {
+    flex-direction: column;
+    gap: 15rpx;
+  }
+  
+  .customize-form .form-actions button {
+    width: 100%;
+    max-width: none;
+    min-height: 90rpx;
+  }
+  
+  .avatar-selector {
+    flex-direction: column;
+    align-items: center;
+    gap: 15rpx;
+    padding: 20rpx;
+  }
+  
+  .current-avatar {
+    margin-bottom: 10rpx;
+  }
+  
+  .avatar-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+@media screen and (min-width: 1200rpx) {
+  .customize-form {
+    max-width: 700rpx;
+    padding: 50rpx;
+  }
+  
+  .avatar-selector {
+    padding: 20rpx 30rpx;
+  }
+  
+  .customize-form .form-actions button {
+    min-height: 85rpx;
+    font-size: 32rpx;
+  }
 }
 </style>
