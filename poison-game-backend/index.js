@@ -540,14 +540,17 @@ wss.on('connection', (ws, req) => {
 
         if (roomRequests.size >= game.players.length) {
           game.restart();
+          const gameState = game.getState();
           debugLog('游戏重启完成，广播重启消息:', { 
             roomId,
             playersAfterRestart: game.players.map(p => ({ id: p.id, name: p.name, isOut: p.isOut, poisonPos: p.poisonPos })),
             currentPlayerIndex: game.currentPlayerIndex,
-            status: game.status
+            status: game.status,
+            boardAfterRestart: gameState.board,
+            boardIsEmpty: gameState.board.every(row => row.every(cell => cell === null))
           });
           restartRequests.delete(roomId);
-          broadcast(roomId, { type: 'gameRestarted', state: game.getState(), players: game.players });
+          broadcast(roomId, { type: 'gameRestarted', state: gameState, players: game.players });
         }
       } else if (action === 'leaveRoom') {
         debugLog('处理 leaveRoom:', { clientId, roomId });

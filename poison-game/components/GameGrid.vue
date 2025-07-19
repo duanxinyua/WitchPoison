@@ -86,9 +86,12 @@ export default {
   watch: {
     board: {
       handler(newBoard) {
-        console.log('GameGrid board ����:', JSON.parse(JSON.stringify(newBoard)));
+        console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)));
+        // 强制更新组件
+        this.$forceUpdate();
       },
       deep: true,
+      immediate: true,
     },
     gameStarted(newVal) {
       console.log('GameGrid gameStarted ����:', newVal);

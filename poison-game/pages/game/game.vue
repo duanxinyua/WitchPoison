@@ -179,6 +179,7 @@ export default {
             uni.showToast({ title: `等待其他玩家同意重启 (${data.restartCount}/${this.playerCount})`, icon: 'none' });
             uni.hideLoading();
           } else if (data.type === 'gameRestarted') {
+            console.log('收到 gameRestarted 消息，开始重置游戏状态:', data);
             this.isRestarting = false;
             this.restartRequested = false;
             this.restartCount = 0;
@@ -186,12 +187,22 @@ export default {
             this.isSettingPoison = false;
             this.gameResult = null; // 重置 gameResult
             this.hasJoined = true;
+            
+            // 强制重置棋盘为空
+            console.log('重置前棋盘状态:', JSON.parse(JSON.stringify(this.board)));
+            this.$set(this, 'board', Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
+            console.log('重置后棋盘状态:', JSON.parse(JSON.stringify(this.board)));
+            
             this.updateGameState(data);
             uni.hideLoading();
             uni.showToast({ title: '游戏已重启', icon: 'success' });
             this.$nextTick(() => {
               this.$forceUpdate();
-              console.log('强制刷新 UI，状态:', this.status);
+              console.log('强制刷新 UI 后状态:', { 
+                status: this.status, 
+                board: JSON.parse(JSON.stringify(this.board)),
+                players: this.players.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut }))
+              });
             });
           } else if (data.type === 'playerLeft') {
             this.updateGameState(data);
