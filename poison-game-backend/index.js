@@ -82,11 +82,20 @@ class Game {
         playerId: id, 
         playerName: name,
         oldPlayerId: this.players[existingPlayerIndex].id,
+        oldIsOut: this.players[existingPlayerIndex].isOut,
         roomId: this.roomId
       });
-      // 替换旧的玩家记录
+      // 替换旧的玩家记录，确保重置所有状态
       this.players[existingPlayerIndex] = { id, name, emoji: this.players[existingPlayerIndex].emoji, poisonPos: null, isOut: false, clientId: id };
-      debugLog('玩家重新加入（替换旧记录）:', { id, name, roomId: this.roomId, players: this.players.length, status: this.status });
+      debugLog('玩家重新加入（替换旧记录）后状态:', { 
+        id, 
+        name, 
+        roomId: this.roomId, 
+        isOut: this.players[existingPlayerIndex].isOut,
+        poisonPos: this.players[existingPlayerIndex].poisonPos,
+        players: this.players.length, 
+        status: this.status 
+      });
       
       // 重要：替换记录后也需要检查房间状态是否需要更新
       // 如果房间在等待重启状态或游戏结束状态且人数不满，重置为等待状态
@@ -175,15 +184,22 @@ class Game {
     }
     const currentPlayer = this.players[this.currentPlayerIndex];
     if (!currentPlayer) {
-      debugWarn('翻转格子失败，无当前玩家:', { playerId, roomId: this.roomId });
+      debugWarn('翻转格子失败，无当前玩家:', { playerId, roomId: this.roomId, currentPlayerIndex: this.currentPlayerIndex, playersCount: this.players.length });
       return { success: false, message: '无当前玩家' };
     }
     if (playerId !== currentPlayer.id) {
-      debugWarn('翻转格子失败，非当前玩家:', { playerId, currentPlayerId: currentPlayer.id });
+      debugWarn('翻转格子失败，非当前玩家:', { playerId, currentPlayerId: currentPlayer.id, currentPlayerIndex: this.currentPlayerIndex });
       return { success: false, message: '非你的回合' };
     }
     if (currentPlayer.isOut) {
-      debugWarn('翻转格子失败，玩家已出局:', { playerId });
+      debugWarn('翻转格子失败，玩家已出局:', { 
+        playerId, 
+        playerName: currentPlayer.name,
+        isOut: currentPlayer.isOut,
+        currentPlayerIndex: this.currentPlayerIndex,
+        allPlayers: this.players.map(p => ({ id: p.id, name: p.name, isOut: p.isOut })),
+        roomId: this.roomId
+      });
       return { success: false, message: '你已出局' };
     }
     if (this.board[x][y] !== null) {
@@ -247,7 +263,16 @@ class Game {
       player.poisonPos = null;
       player.isOut = false;
     });
-    debugLog('游戏重启:', { roomId: this.roomId, players: this.players });
+    // 确保当前玩家索引指向有效玩家
+    if (this.players.length > 0) {
+      this.currentPlayerIndex = 0;
+    }
+    debugLog('游戏重启后状态:', { 
+      roomId: this.roomId, 
+      players: this.players.map(p => ({ id: p.id, name: p.name, isOut: p.isOut, poisonPos: p.poisonPos })),
+      currentPlayerIndex: this.currentPlayerIndex,
+      status: this.status
+    });
     return true;
   }
 
