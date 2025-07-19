@@ -257,15 +257,27 @@ export default {
         uni.hideLoading();
         return;
       }
-      const newBoard = Array.isArray(data.state.board) && data.state.board.every(row => Array.isArray(row))
-        ? JSON.parse(JSON.stringify(data.state.board))
-        : Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+      // 强制重置棋盘：在waiting、settingPoison状态或gameRestarted时清空棋盘
+      const shouldResetBoard = data.type === 'gameRestarted' || 
+                              data.state.status === 'waiting' || 
+                              data.state.status === 'settingPoison';
+      
+      const newBoard = shouldResetBoard 
+        ? Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null))
+        : (Array.isArray(data.state.board) && data.state.board.every(row => Array.isArray(row))
+            ? JSON.parse(JSON.stringify(data.state.board))
+            : Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
       this.$set(this, 'board', newBoard);
+      // 强制重置玩家状态：在重启、等待或设置毒药状态下完全清理玩家状态
+      const shouldResetPlayerStates = data.type === 'gameRestarted' || 
+                                     data.state.status === 'waiting' || 
+                                     data.state.status === 'settingPoison';
+      
       this.$set(this, 'players', Array.isArray(data.state.players) ? data.state.players.map(p => ({
         ...p,
         id: p.clientId || p.id,
-        poisonPos: (data.type === 'gameRestarted' || data.state.status === 'waiting' || data.state.status === 'settingPoison') ? null : (p.poisonPos || null), // 在waiting或settingPoison状态下重置poisonPos
-        isOut: (data.type === 'gameRestarted' || data.state.status === 'waiting' || data.state.status === 'settingPoison') ? false : (p.isOut || false) // 重置isOut状态
+        poisonPos: shouldResetPlayerStates ? null : (p.poisonPos || null),
+        isOut: shouldResetPlayerStates ? false : (p.isOut || false)
       })) : []);
       const currentPlayerIndex = data.state.currentPlayerIndex >= 0 ? data.state.currentPlayerIndex : 0;
       this.$set(this, 'currentPlayer', this.players[currentPlayerIndex] || null);
@@ -281,12 +293,17 @@ export default {
         this.$set(this, 'gameResult', null); // 确保重置
       }
       console.log('状态更新后:', {
+        updateType: data.type,
         status: this.status,
-        players: this.players.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos })),
+        gameStarted: this.gameStarted,
+        shouldResetBoard: shouldResetBoard,
+        shouldResetPlayerStates: shouldResetPlayerStates,
+        players: this.players.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut })),
         playerCount: this.playerCount,
         boardRows: this.board.length,
         boardCols: this.board.length ? this.board[0].length : 0,
         currentPlayer: this.currentPlayer?.id,
+        currentPlayerName: this.currentPlayer?.name,
         clientId: this.clientId,
         board: JSON.parse(JSON.stringify(this.board)),
         gameResult: this.gameResult
@@ -338,6 +355,15 @@ export default {
           this.isSettingPoison = false;
         }
       } else if (this.status === 'playing' && this.currentPlayer && this.currentPlayer.id === this.clientId) {
+        const currentPlayerData = this.players.find(p => p.id === this.clientId);
+        console.log('翻转格子前玩家状态检查:', {
+          clientId: this.clientId,
+          currentPlayer: this.currentPlayer,
+          currentPlayerData: currentPlayerData,
+          isMyTurn: this.currentPlayer?.id === this.clientId,
+          playerIsOut: currentPlayerData?.isOut,
+          status: this.status
+        });
         this.isFlipping = true;
         const message = { action: 'flipTile', roomId: this.roomId, x: row, y: col, clientId: this.clientId };
         const sent = sendMessage(message);
