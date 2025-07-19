@@ -264,7 +264,8 @@ export default {
       this.$set(this, 'players', Array.isArray(data.state.players) ? data.state.players.map(p => ({
         ...p,
         id: p.clientId || p.id,
-        poisonPos: data.type === 'gameRestarted' ? null : (p.poisonPos || null) // 强制重置 poisonPos
+        poisonPos: (data.type === 'gameRestarted' || data.state.status === 'waiting' || data.state.status === 'settingPoison') ? null : (p.poisonPos || null), // 在waiting或settingPoison状态下重置poisonPos
+        isOut: (data.type === 'gameRestarted' || data.state.status === 'waiting' || data.state.status === 'settingPoison') ? false : (p.isOut || false) // 重置isOut状态
       })) : []);
       const currentPlayerIndex = data.state.currentPlayerIndex >= 0 ? data.state.currentPlayerIndex : 0;
       this.$set(this, 'currentPlayer', this.players[currentPlayerIndex] || null);

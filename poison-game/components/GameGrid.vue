@@ -115,8 +115,8 @@ export default {
 .grid {
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
-  padding: 15rpx;
+  gap: calc(8rpx - var(--board-size, 5) * 0.5rpx); /* 棋盘越大，间距越小 */
+  padding: calc(20rpx - var(--board-size, 5) * 1rpx); /* 棋盘越大，padding越小 */
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10rpx);
   border-radius: 20rpx;
@@ -145,19 +145,19 @@ export default {
 .row {
   display: flex;
   flex-direction: row !important;
-  gap: 4rpx;
+  gap: calc(8rpx - var(--board-size, 5) * 0.5rpx); /* 棋盘越大，间距越小 */
   justify-content: center;
 }
 
 /* 游戏单元格 - 现代化设计和交互效果 */
 .cell {
   /* 响应式尺寸计算 - 根据屏幕宽度和棋盘大小自适应 */
-  width: calc((100vw - 150rpx) / var(--board-size, 5));
-  height: calc((100vw - 150rpx) / var(--board-size, 5));
-  max-width: 70rpx;
-  max-height: 70rpx;
-  min-width: 40rpx;
-  min-height: 40rpx;
+  width: calc((100vw - 120rpx) / var(--board-size, 5));
+  height: calc((100vw - 120rpx) / var(--board-size, 5));
+  max-width: calc(100rpx + (10 - var(--board-size, 5)) * 15rpx); /* 棋盘越小，格子越大 */
+  max-height: calc(100rpx + (10 - var(--board-size, 5)) * 15rpx);
+  min-width: 50rpx;
+  min-height: 50rpx;
   
   /* 外观样式 */
   border: 2rpx solid rgba(0, 122, 255, 0.2);
@@ -286,17 +286,20 @@ export default {
 /* 响应式设计 - 针对不同屏幕尺寸和棋盘大小调整 */
 @media screen and (max-width: 750rpx) {
   .grid {
-    padding: 10rpx;
-    gap: 3rpx;
+    padding: calc(15rpx - var(--board-size, 5) * 0.8rpx);
+    gap: calc(6rpx - var(--board-size, 5) * 0.3rpx);
   }
   
   .row {
-    gap: 3rpx;
+    gap: calc(6rpx - var(--board-size, 5) * 0.3rpx);
   }
   
   .cell {
     border-radius: 8rpx;
     border-width: 1rpx;
+    /* 小屏幕上进一步优化尺寸 */
+    width: calc((100vw - 100rpx) / var(--board-size, 5));
+    height: calc((100vw - 100rpx) / var(--board-size, 5));
   }
 }
 
