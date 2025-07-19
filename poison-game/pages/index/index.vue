@@ -32,7 +32,7 @@
           <text class="form-label">棋盘尺寸</text>
           <view class="number-input">
             <button @click="updateBoardSize(-1)">-</button>
-            <input v-model.number="boardSize" type="number" disabled class="number-field" />
+            <input :value="boardSize" type="number" disabled class="number-field" />
             <button @click="updateBoardSize(1)">+</button>
           </view>
         </view>
@@ -40,7 +40,7 @@
           <text class="form-label">玩家人数</text>
           <view class="number-input">
             <button @click="updatePlayerCount(-1)">-</button>
-            <input v-model.number="playerCount" type="number" disabled class="number-field" />
+            <input :value="playerCount" type="number" disabled class="number-field" />
             <button @click="updatePlayerCount(1)">+</button>
           </view>
         </view>
@@ -148,10 +148,14 @@ export default {
       this.showCreateRoomModal = false;
     },
     updateBoardSize(delta) {
-      this.boardSize = Math.max(5, Math.min(10, this.boardSize + delta));
+      const newSize = Math.max(5, Math.min(10, this.boardSize + delta));
+      this.$set(this, 'boardSize', newSize);
+      console.log('更新棋盘尺寸:', newSize);
     },
     updatePlayerCount(delta) {
-      this.playerCount = Math.max(2, Math.min(5, this.playerCount + delta));
+      const newCount = Math.max(2, Math.min(5, this.playerCount + delta));
+      this.$set(this, 'playerCount', newCount);
+      console.log('更新玩家人数:', newCount);
     },
     async initWebSocket() {
       if (!this.nicknameSaved) {
@@ -172,7 +176,18 @@ export default {
       }
     },
     async createRoom() {
-      if (this.isCreating) return;
+      console.log('开始创建房间，当前状态:', {
+        isCreating: this.isCreating,
+        boardSize: this.boardSize,
+        playerCount: this.playerCount,
+        clientId: this.clientId
+      });
+      
+      if (this.isCreating) {
+        console.log('房间正在创建中，忽略重复请求');
+        return;
+      }
+      
       if (!this.clientId) {
         console.error('clientId 缺失，尝试重新初始化');
         await this.initWebSocket();
@@ -182,15 +197,21 @@ export default {
           return;
         }
       }
-      if (this.boardSize < 5 || this.boardSize > 10) {
+      
+      // 验证参数
+      const boardSize = Number(this.boardSize) || 5;
+      const playerCount = Number(this.playerCount) || 2;
+      
+      if (boardSize < 5 || boardSize > 10) {
         uni.showToast({ title: '棋盘尺寸应为 5-10', icon: 'error' });
         return;
       }
-      if (this.playerCount < 2 || this.playerCount > 5) {
+      if (playerCount < 2 || playerCount > 5) {
         uni.showToast({ title: '玩家人数应为 2-5', icon: 'error' });
         return;
       }
-      this.isCreating = true;
+      
+      this.$set(this, 'isCreating', true);
       uni.showLoading({ title: '创建房间中...', mask: true });
 
       if (!isConnected()) {
@@ -230,8 +251,8 @@ export default {
       try {
         const createData = {
           action: 'create',
-          boardSize: this.boardSize,
-          playerCount: this.playerCount,
+          boardSize: boardSize,
+          playerCount: playerCount,
           name: this.nickname,
           clientId: this.clientId,
         };
@@ -244,12 +265,14 @@ export default {
         console.log('发送创建房间请求:', createData);
       } catch (error) {
         console.error('创建房间失败:', error);
-        clearTimeout(this.createTimeout);
-        this.createTimeout = null;
+        if (this.createTimeout) {
+          clearTimeout(this.createTimeout);
+          this.createTimeout = null;
+        }
         uni.hideLoading();
         uni.showToast({ title: '创建房间失败，请重试', icon: 'error' });
-        this.isCreating = false;
-        this.showCreateRoomModal = false;
+        this.$set(this, 'isCreating', false);
+        this.$set(this, 'showCreateRoomModal', false);
       }
     },
     async joinRoom() {
@@ -328,13 +351,15 @@ export default {
             console.log('收到心跳响应:', data);
           } else if (data.type === 'gameCreated') {
             console.log('处理 gameCreated:', { roomId: data.roomId });
-            clearTimeout(this.createTimeout);
-            this.createTimeout = null;
-            this.roomId = data.roomId;
-            this.showCreateRoomModal = false;
+            if (this.createTimeout) {
+              clearTimeout(this.createTimeout);
+              this.createTimeout = null;
+            }
+            this.$set(this, 'roomId', data.roomId);
+            this.$set(this, 'showCreateRoomModal', false);
             if (this.isCreating) {
               uni.hideLoading();
-              this.isCreating = false;
+              this.$set(this, 'isCreating', false);
             }
             uni.showToast({ title: '房间创建成功', icon: 'success' });
             const gameState = encodeURIComponent(JSON.stringify(data));
@@ -391,14 +416,16 @@ export default {
             console.error('后端错误:', data.message);
             uni.showToast({ title: data.message || '未知错误', icon: 'error' });
             if (this.isCreating) {
-              clearTimeout(this.createTimeout);
-              this.createTimeout = null;
+              if (this.createTimeout) {
+                clearTimeout(this.createTimeout);
+                this.createTimeout = null;
+              }
               uni.hideLoading();
-              this.isCreating = false;
-              this.showCreateRoomModal = false;
+              this.$set(this, 'isCreating', false);
+              this.$set(this, 'showCreateRoomModal', false);
             }
-            this.showJoinRoomModal = false;
-            this.hasNavigated = false;
+            this.$set(this, 'showJoinRoomModal', false);
+            this.$set(this, 'hasNavigated', false);
             if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
               console.warn('clientId 无效，重新初始化 WebSocket');
               closeWebSocket();
