@@ -121,6 +121,7 @@
 <script>
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
 import { autoLogin, getCurrentUser, isLoggedIn } from '../../utils/auth';
+import config from '../../config/index.js';
 
 /**
  * 生成随机昵称函数
@@ -711,7 +712,7 @@ export default {
       try {
         const response = await new Promise((resolve, reject) => {
           wx.request({
-            url: `${require('../config/index.js').default.apiUrl}/api/auth/update-custom-info`,
+            url: `${config.apiUrl}/api/auth/update-custom-info`,
             method: 'POST',
             data: {
               nickname: this.nickname,
