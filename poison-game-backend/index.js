@@ -902,14 +902,21 @@ async function startServer() {
     debugLog('数据库连接初始化成功');
     
     // 启动HTTP服务器
-    server.listen(3000, () => {
-      debugLog('服务器运行在 http://localhost:3000');
+    const port = process.env.PORT || 3000;
+    const host = process.env.SERVER_HOST || 'localhost';
+    
+    server.listen(port, () => {
+      debugLog(`服务器运行在 http://${host}:${port}`);
       debugLog('WebSocket服务器已启动');
       debugLog('数据库持久化已启用');
       
       // 2025-07-25: 验证环境变量加载状态
       debugLog('环境变量加载状态:', {
         NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT,
+        SERVER_HOST: process.env.SERVER_HOST,
+        API_DOMAIN: process.env.API_DOMAIN,
+        WS_DOMAIN: process.env.WS_DOMAIN,
         hasWechatAppId: !!process.env.WECHAT_APPID,
         wechatAppIdLength: process.env.WECHAT_APPID ? process.env.WECHAT_APPID.length : 0,
         hasWechatSecret: !!process.env.WECHAT_SECRET,

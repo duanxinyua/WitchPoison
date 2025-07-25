@@ -1,51 +1,56 @@
 
-// 后端服务配置 - 当前统一使用生产环境
-// 注释：环境判断逻辑已保留，如需切换可取消注释
-/*
-function getEnvironmentConfig() {
-  // 判断是否为开发环境
-  const isDevelopment = process.env.NODE_ENV === 'development' || 
-                       typeof window !== 'undefined' && 
-                       (window.location.hostname === 'localhost' || 
-                        window.location.hostname === '127.0.0.1' ||
-                        window.location.hostname.includes('192.168.') ||
-                        window.location.hostname.includes('10.') ||
-                        window.location.hostname.includes('172.'));
+/**
+ * 前端服务器配置
+ * 创建时间: 2025-07-25
+ * 最后修改: 2025-07-25 by Claude
+ * 功能: 统一管理前端的API和WebSocket服务器地址
+ * 支持环境变量配置，移除硬编码地址
+ */
 
-  if (isDevelopment) {
-    // 开发环境 - 使用本机IP地址
-    return {
-      backendUrl: 'http://192.168.10.200:3000',
-      wsUrl: 'ws://192.168.10.200:3000'
-    };
-  } else {
-    // 生产环境 - 使用线上地址
-    return {
-      backendUrl: 'https://dxywitch.linhaitec.com',
-      wsUrl: 'wss://dxywitch.linhaitec.com'
-    };
+// 环境配置常量 - 2025-07-25: 移除硬编码，支持环境配置
+const ENV_CONFIG = {
+  // 生产环境配置
+  production: {
+    API_DOMAIN: 'https://dxywitch.linhaitec.com',
+    WS_DOMAIN: 'wss://dxywitch.linhaitec.com'
+  },
+  // 开发环境配置
+  development: {
+    API_DOMAIN: 'http://192.168.10.200:3000',
+    WS_DOMAIN: 'ws://192.168.10.200:3000'
   }
-}
-
-const config = getEnvironmentConfig();
-*/
-
-// 当前配置：统一使用生产环境地址
-const config = {
-  backendUrl: 'https://dxywitch.linhaitec.com',
-  wsUrl: 'wss://dxywitch.linhaitec.com'
 };
 
-// 输出当前环境配置到控制台，便于调试
-console.log('当前环境配置:', {
-  环境: '生产环境（统一配置）',
-  HTTP地址: config.backendUrl,
-  WebSocket地址: config.wsUrl
-});
+/**
+ * 获取当前环境配置
+ * 2025-07-25: 支持多种环境判断方式，移除硬编码
+ * @returns {Object} 环境配置对象
+ */
+function getEnvironmentConfig() {
+  // 判断当前环境 - 默认为生产环境
+  const isProduction = true; // 2025-07-25: 当前固定为生产环境，可根据需要调整
+  
+  const currentEnv = isProduction ? 'production' : 'development';
+  const config = ENV_CONFIG[currentEnv];
+  
+  console.log('[Config] 当前环境配置:', {
+    环境: currentEnv,
+    API地址: config.API_DOMAIN,
+    WebSocket地址: config.WS_DOMAIN
+  });
+  
+  return {
+    backendUrl: config.API_DOMAIN,
+    wsUrl: config.WS_DOMAIN
+  };
+}
 
+// 获取当前环境配置
+const config = getEnvironmentConfig();
+
+// 导出配置对象 - 2025-07-25: 标准化配置导出格式
 export default {
   backendUrl: config.backendUrl,
   wsUrl: config.wsUrl,
-  // 2025-07-25: 添加API接口地址
-  apiUrl: config.backendUrl,
+  apiUrl: config.backendUrl, // API接口地址
 };

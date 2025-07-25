@@ -12,16 +12,16 @@
 
 const mysql = require('mysql2/promise');
 
-// 数据库配置 - 2025-07-25: 配置本地MySQL9.0数据库连接（安全考虑）
+// 数据库配置 - 2025-07-25: 使用环境变量配置MySQL9.0数据库连接（安全考虑）
 const dbConfig = {
-  host: '127.0.0.1',
-  port: 13306,
-  user: 'root',
-  password: '7HSEG6NB64Cy3ZpH',
-  database: 'witch_poison_game',
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'witch_poison_game',
   charset: 'utf8mb4',
   // 连接池配置
-  connectionLimit: 5,
+  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 5,
   queueLimit: 0,
   // MySQL 9.0 兼容性配置
   ssl: false,
