@@ -2497,3 +2497,74 @@ NODE_ENV=production
 #### 总结
 
 此次重构实现了项目配置的完全环境变量化，消除了所有硬编码参数，显著提升了安全性、部署灵活性和代码质量。前后端配置统一管理，便于维护和扩展。
+
+---
+
+### 2025-07-25 修复数据库连接认证错误
+
+#### 问题描述
+服务器启动失败，出现数据库认证错误：
+```
+ER_ACCESS_DENIED_ERROR: Access denied for user 'root'@'localhost' (using password: YES)
+errno: 1045, sqlState: '28000'
+```
+
+#### 问题分析
+
+**错误原因**: 数据库连接认证失败
+- **错误代码**: 1045 (Access denied)
+- **用户**: root@localhost
+- **状态**: 使用密码但认证失败
+
+**可能原因**:
+1. **密码错误**: 环境变量中的密码与数据库实际密码不匹配
+2. **端口配置**: 数据库运行在13306端口，需要确认配置正确
+3. **主机配置**: localhost vs 127.0.0.1 的连接差异
+4. **数据库权限**: root用户可能没有从localhost连接的权限
+
+#### 修复方案
+
+**数据库配置调整**:
+```bash
+# 修改后的数据库配置
+DB_HOST=localhost
+DB_PORT=13306          # 确认端口正确
+DB_USER=root
+DB_PASSWORD=root       # 修改为正确的密码
+DB_NAME=witch_poison_game
+DB_CONNECTION_LIMIT=5
+```
+
+#### 后续验证步骤
+
+**服务器端需要确认**:
+1. **数据库服务状态**: 确认MySQL服务在13306端口正常运行
+2. **用户权限**: 验证root用户是否有从localhost连接的权限
+3. **密码正确性**: 确认root用户的实际密码
+4. **数据库存在性**: 确认 `witch_poison_game` 数据库已创建
+
+**可能的数据库命令**:
+```sql
+-- 检查用户权限
+SELECT user, host FROM mysql.user WHERE user='root';
+
+-- 创建数据库（如果不存在）
+CREATE DATABASE IF NOT EXISTS witch_poison_game CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 确保root用户有正确权限
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'root'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+#### 临时解决方案
+
+如果密码问题持续存在，可以考虑：
+1. 创建专用的数据库用户而不是使用root
+2. 确认宝塔面板中MySQL的实际配置
+3. 检查MySQL配置文件中的认证方式
+
+#### 注意事项
+
+- 数据库端口13306是非标准端口，确认是否为宝塔面板的特殊配置
+- 环境变量配置已正确，主要问题在于服务器端的数据库认证
+- 需要在服务器上直接验证数据库连接
