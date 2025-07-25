@@ -55,10 +55,30 @@ export async function wxLogin(forceAuth = false) {
       }
     }
 
-    // 第三步：发送到后端进行登录认证
+    // 第三步：获取用户本地自定义信息
+    const localNickname = uni.getStorageSync('nickname');
+    const localAvatar = uni.getStorageSync('userAvatar');
+    const hasCustomized = uni.getStorageSync('manuallySetNickname') === 'true';
+    
+    // 合并用户信息，优先使用本地自定义信息
+    const finalUserInfo = {
+      ...userInfo,
+      nickname: hasCustomized && localNickname ? localNickname : userInfo.nickname,
+      avatarEmoji: hasCustomized && localAvatar ? localAvatar : null
+    };
+    
+    console.log('[Auth] 准备发送用户信息到后端:', {
+      hasCustomized,
+      localNickname,
+      localAvatar,
+      finalNickname: finalUserInfo.nickname,
+      finalAvatar: finalUserInfo.avatarEmoji
+    });
+
+    // 第四步：发送到后端进行登录认证
     const authResult = await authenticateWithBackend({
       code: loginResult.code,
-      userInfo: userInfo
+      userInfo: finalUserInfo
     });
 
     // 第四步：保存用户信息和令牌

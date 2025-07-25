@@ -123,6 +123,14 @@ class User {
           
           // 保存到数据库作为自定义信息
           await this.updateCustomUserInfo(existingUser.id, finalNickname, finalAvatarEmoji);
+        } else if (clientNickname && !clientAvatarEmoji) {
+          // 2a. 只有昵称自定义，头像使用原有或随机
+          finalNickname = clientNickname;
+          finalAvatarEmoji = existingUser.avatar_emoji || this.getRandomAvatar();
+          console.log('[User] 使用前端自定义昵称，头像使用原有:', { finalNickname, finalAvatarEmoji });
+          
+          // 保存到数据库作为自定义信息
+          await this.updateCustomUserInfo(existingUser.id, finalNickname, finalAvatarEmoji);
         } else {
           // 3. 没有自定义信息，使用数据库原有信息或生成新的
           finalNickname = existingUser.nickname || this.generateRandomNickname();
@@ -152,11 +160,17 @@ class User {
         let finalNickname, finalAvatarEmoji, hasCustomized = false;
         
         if (clientNickname && clientAvatarEmoji) {
-          // 前端有缓存的自定义信息
+          // 前端有完整的自定义信息
           finalNickname = clientNickname;
           finalAvatarEmoji = clientAvatarEmoji;
           hasCustomized = true;
-          console.log('[User] 新用户使用前端缓存信息:', { finalNickname, finalAvatarEmoji });
+          console.log('[User] 新用户使用前端完整自定义信息:', { finalNickname, finalAvatarEmoji });
+        } else if (clientNickname && !clientAvatarEmoji) {
+          // 前端只有昵称自定义
+          finalNickname = clientNickname;
+          finalAvatarEmoji = this.getRandomAvatar();
+          hasCustomized = true;
+          console.log('[User] 新用户使用前端自定义昵称:', { finalNickname, finalAvatarEmoji });
         } else {
           // 随机生成信息
           finalNickname = this.generateRandomNickname();

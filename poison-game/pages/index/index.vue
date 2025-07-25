@@ -8,9 +8,21 @@
             <text class="user-name">{{ nickname }}</text>
             <text class="user-avatar">{{ userAvatar }}</text>
           </view>
-          <text class="user-status">{{ nicknameSaved ? '已设置昵称' : '游客模式' }}</text>
+          <text class="user-status">
+            {{ isLoggedIn ? (userInfo && userInfo.is_guest ? '游客模式' : '微信用户') : '未登录' }}
+          </text>
         </view>
-        <button @click="openNicknameModal" class="customize-btn">个性化</button>
+        <view class="user-actions">
+          <button @click="openNicknameModal" class="customize-btn">个性化</button>
+          <button 
+            v-if="!isLoggedIn || (userInfo && userInfo.is_guest)" 
+            @click="performWechatLogin" 
+            :disabled="isLoggingIn"
+            class="login-btn"
+          >
+            {{ isLoggingIn ? '登录中...' : '微信登录' }}
+          </button>
+        </view>
       </view>
     </view>
     <view class="room-section">
@@ -52,7 +64,17 @@
       <view class="join-form">
         <view class="form-title">加入房间</view>
         <view class="form-item">
-          <input v-model="roomId" placeholder="请输入房间ID" class="input-field" />
+          <input 
+            v-model="roomId" 
+            placeholder="请输入6位数字房间ID" 
+            class="input-field room-id-input" 
+            maxlength="8"
+            type="text"
+            @input="formatRoomId"
+          />
+          <view class="input-hint">
+            <text>💡 房间ID为6位数字，如：123456</text>
+          </view>
         </view>
         <view class="form-actions">
           <button @click="joinRoom">确定</button>
@@ -88,32 +110,107 @@
   </view>
 </template>
 
+<!--
+  首页组件 - index.vue
+  创建时间: 2025-07-25
+  最后修改: 2025-07-25 by Claude
+  功能: 用户信息管理、房间创建和加入、WebSocket连接管理
+  页面状态: 支持游客模式和个性化设置
+-->
+
 <script>
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
+import { autoLogin, getCurrentUser, isLoggedIn } from '../../utils/auth';
+
+/**
+ * 生成随机昵称函数
+ * 2025-07-25: 大幅扩展词库，支持多种风格和主题
+ * @returns {string} 生成的随机昵称
+ */
+function generateRandomNickname() {
+  // 性格特征形容词 (30个)
+  const personalityAdjs = [
+    '勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的',
+    '温柔的', '坚强的', '优雅的', '热情的', '谦逊的', '活泼的', '沉稳的', '机智的',
+    '善良的', '果断的', '乐观的', '细心的', '耐心的', '诚实的', '忠诚的', '自信的',
+    '慷慨的', '幽默的', '创新的', '执着的', '独立的', '包容的'
+  ];
+  
+  // 颜色形容词 (20个)
+  const colorAdjs = [
+    '金色的', '银色的', '翠绿的', '深蓝的', '火红的', '雪白的', '墨黑的', '紫色的',
+    '橙色的', '粉色的', '青色的', '棕色的', '灰色的', '彩虹的', '透明的', '闪亮的',
+    '暗色的', '亮色的', '渐变的', '炫彩的'
+  ];
+  
+  // 自然元素形容词 (15个)
+  const natureAdjs = [
+    '流水的', '山峰的', '星空的', '月光的', '阳光的', '风暴的', '雷电的', '彩云的',
+    '海洋的', '森林的', '沙漠的', '冰雪的', '火焰的', '大地的', '天空的'
+  ];
+
+  // 角色职业名词 (35个)
+  const professionNouns = [
+    '探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者',
+    '骑士', '刺客', '弓箭手', '牧师', '炼金师', '商人', '工匠', '艺术家',
+    '音乐家', '舞者', '诗人', '作家', '画家', '雕塑家', '建筑师', '发明家',
+    '探索者', '收藏家', '园丁', '厨师', '裁缝', '铁匠', '木匠', '船长',
+    '飞行员', '司机', '向导'
+  ];
+  
+  // 动物名词 (25个)  
+  const animalNouns = [
+    '狐狸', '老虎', '狮子', '豹子', '狼', '熊', '鹰', '隼',
+    '猫', '狗', '兔子', '松鼠', '海豚', '鲸鱼', '企鹅', '天鹅',
+    '孔雀', '凤凰', '龙', '麒麟', '白马', '黑豹', '雪豹', '金雕', '银狼'
+  ];
+  
+  // 自然元素名词 (20个)
+  const elementNouns = [
+    '星辰', '月亮', '太阳', '彩虹', '流星', '闪电', '雷霆', '烈火',
+    '寒冰', '清风', '暴雪', '春雨', '秋叶', '夏花', '冬松', '山川',
+    '河流', '海浪', '云朵', '露珠'
+  ];
+  
+  // 宝石珍宝名词 (15个)
+  const gemNouns = [
+    '钻石', '红宝石', '蓝宝石', '绿宝石', '紫水晶', '黄玉', '珍珠', '琥珀',
+    '翡翠', '玛瑙', '水晶', '黄金', '白银', '青铜', '秘银'
+  ];
+
+  // 随机选择形容词类别
+  const adjCategories = [personalityAdjs, colorAdjs, natureAdjs];
+  const selectedAdjCategory = adjCategories[Math.floor(Math.random() * adjCategories.length)];
+  
+  // 随机选择名词类别
+  const nounCategories = [professionNouns, animalNouns, elementNouns, gemNouns];
+  const selectedNounCategory = nounCategories[Math.floor(Math.random() * nounCategories.length)];
+  
+  // 2025-07-25: 简化昵称生成为经典单形容词+单名词组合
+  const randomAdj = selectedAdjCategory[Math.floor(Math.random() * selectedAdjCategory.length)];
+  const randomNoun = selectedNounCategory[Math.floor(Math.random() * selectedNounCategory.length)];
+  return `${randomAdj}${randomNoun}`;
+}
 
 export default {
   data() {
-    // 初始化默认昵称和头像，确保第一次使用时就保存到本地
+    // 2025-07-25: 初始化用户数据，支持游客模式和个性化设置
+    // 从本地存储获取用户信息
     let nickname = uni.getStorageSync('nickname');
     let userAvatar = uni.getStorageSync('userAvatar');
     let isFirstTime = false;
     
-    // 检查是否手动设置过昵称
+    // 检查是否手动设置过昵称 - 用于区分游客模式和已设置模式
     const manuallySet = uni.getStorageSync('manuallySetNickname') === 'true';
     
-    // 如果没有昵称，生成默认昵称并保存
+    // 2025-07-25: 自动生成游客昵称 - 大幅扩展词库，增加昵称多样性
     if (!nickname) {
-      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
-      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
-      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-      const randomNum = Math.floor(Math.random() * 999) + 1;
-      nickname = `${randomAdj}${randomNoun}${randomNum}`;
+      nickname = generateRandomNickname();
       uni.setStorageSync('nickname', nickname);
       isFirstTime = true;
     }
     
-    // 如果没有头像，设置默认头像并保存
+    // 2025-07-25: 设置默认头像 - 如果没有头像，设置默认头像并保存
     if (!userAvatar) {
       userAvatar = '😺';
       uni.setStorageSync('userAvatar', userAvatar);
@@ -137,16 +234,32 @@ export default {
       hasNavigated: false,
       tempNickname: '', // 临时昵称输入
       isFirstTime: isFirstTime, // 标记是否首次使用
+      // 2025-07-25: 添加用户登录状态管理
+      isLoggedIn: false,
+      userToken: null,
+      userInfo: null,
+      isLoggingIn: false
     };
   },
   methods: {
+    /**
+     * 格式化房间ID输入
+     * 2025-07-25: 限制输入格式，只允许数字和大写字母
+     * @param {Event} e - 输入事件
+     */
+    formatRoomId(e) {
+      let value = e.detail.value;
+      // 转换为大写并只保留数字和字母
+      value = value.toUpperCase().replace(/[^0-9A-Z]/g, '');
+      // 更新输入值
+      this.$set(this, 'roomId', value);
+    },
+    /**
+     * 生成游客昵称 - 2025-07-25: 使用扩展的词库生成昵称
+     * @returns {string} 生成的随机昵称
+     */
     generateGuestNickname() {
-      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
-      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
-      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-      const randomNum = Math.floor(Math.random() * 999) + 1;
-      return `${randomAdj}${randomNoun}${randomNum}`;
+      return generateRandomNickname();
     },
     openNicknameModal() {
       this.$set(this, 'tempNickname', this.nickname);
@@ -367,10 +480,28 @@ export default {
         this.$set(this, 'showCreateRoomModal', false);
       }
     },
+    /**
+     * 加入房间方法
+     * 2025-07-25: 添加房间ID格式验证，支持6位数字或8位UUID格式
+     */
     async joinRoom() {
       if (this.hasNavigated) return;
-      if (!this.roomId.trim()) {
+      
+      // 2025-07-25: 房间ID基础验证
+      const roomIdTrimmed = this.roomId.trim();
+      if (!roomIdTrimmed) {
         uni.showToast({ title: '请输入房间 ID', icon: 'error' });
+        return;
+      }
+      
+      // 2025-07-25: 房间ID格式验证 - 支持6位数字或8位UUID格式
+      const roomIdPattern = /^(\d{6}|[A-Z0-9]{8})$/;
+      if (!roomIdPattern.test(roomIdTrimmed)) {
+        uni.showToast({ 
+          title: '房间ID格式错误\n请输入6位数字', 
+          icon: 'none',
+          duration: 2500 
+        });
         return;
       }
       if (!this.clientId) {
@@ -553,11 +684,124 @@ export default {
       });
       console.log('注册新消息回调');
     },
+    /**
+     * 执行自动登录
+     * 2025-07-25: 检查本地会话，尝试自动登录或使用游客模式
+     */
+    async performAutoLogin() {
+      this.isLoggingIn = true;
+      
+      try {
+        console.log('[Auth] 开始自动登录流程');
+        
+        // 检查是否已有有效会话
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          console.log('[Auth] 发现本地会话，用户:', currentUser.user.nickname);
+          this.setUserData(currentUser);
+          return;
+        }
+        
+        // 尝试自动登录
+        const loginResult = await autoLogin();
+        if (loginResult && loginResult.success) {
+          console.log('[Auth] 自动登录成功:', loginResult.user.nickname);
+          this.setUserData(loginResult);
+        } else {
+          console.warn('[Auth] 自动登录失败，保持游客模式');
+        }
+        
+      } catch (error) {
+        console.error('[Auth] 自动登录出错:', error);
+        // 登录失败不影响游戏继续，保持游客模式
+      } finally {
+        this.isLoggingIn = false;
+      }
+    },
+    
+    /**
+     * 设置用户数据
+     * 2025-07-25: 统一设置用户登录状态和信息
+     */
+    setUserData(loginData) {
+      this.isLoggedIn = true;
+      this.userToken = loginData.token;
+      this.userInfo = loginData.user;
+      
+      // 如果是正式用户，更新昵称和头像
+      if (!loginData.user.is_guest) {
+        // 检查本地是否有自定义设置
+        const localNickname = uni.getStorageSync('nickname');
+        const localAvatar = uni.getStorageSync('userAvatar');  
+        const hasLocalCustomization = uni.getStorageSync('manuallySetNickname') === 'true';
+        
+        // 如果本地有自定义设置，优先使用本地的；否则使用服务器返回的
+        if (hasLocalCustomization && localNickname && localAvatar) {
+          this.nickname = localNickname;
+          this.userAvatar = localAvatar;
+          console.log('[Auth] 保持本地自定义信息:', { nickname: this.nickname, avatar: this.userAvatar });
+        } else {
+          // 使用服务器返回的信息，并保存到本地
+          this.nickname = loginData.user.nickname;
+          this.userAvatar = loginData.user.avatar_emoji;
+          uni.setStorageSync('nickname', this.nickname);
+          uni.setStorageSync('userAvatar', this.userAvatar);
+          console.log('[Auth] 使用服务器返回信息:', { nickname: this.nickname, avatar: this.userAvatar });
+        }
+        
+        this.nicknameSaved = true;
+        uni.setStorageSync('manuallySetNickname', 'true');
+      }
+      
+      console.log('[Auth] 用户数据设置完成:', {
+        isGuest: loginData.user.is_guest,
+        nickname: this.nickname,
+        avatar: this.userAvatar
+      });
+    },
+    
+    /**
+     * 手动微信登录
+     * 2025-07-25: 用户点击登录按钮时调用
+     */
+    async performWechatLogin() {
+      this.isLoggingIn = true;
+      
+      try {
+        uni.showLoading({ title: '正在登录...' });
+        
+        const { wxLogin } = await import('../../utils/auth');
+        const loginResult = await wxLogin();
+        
+        if (loginResult && loginResult.success) {
+          this.setUserData(loginResult);
+          uni.showToast({
+            title: '登录成功！',
+            icon: 'success'
+          });
+        } else {
+          throw new Error('登录失败');
+        }
+        
+      } catch (error) {
+        console.error('[Auth] 微信登录失败:', error);
+        uni.showToast({
+          title: '登录失败，继续游客模式',
+          icon: 'none'
+        });
+      } finally {
+        uni.hideLoading();
+        this.isLoggingIn = false;
+      }
+    },
   },
-  onLoad() {
+  async onLoad() {
     console.log('首页加载');
     uni.removeStorageSync('clientId');
     this.clientId = '';
+    
+    // 2025-07-25: 尝试自动登录
+    await this.performAutoLogin();
     
     // 如果是第一次使用，显示欢迎提示
     if (this.isFirstTime) {
@@ -699,6 +943,14 @@ export default {
   text-align: center;
 }
 
+/* 2025-07-25: 用户操作按钮区域 */
+.user-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  align-items: flex-end;
+}
+
 .customize-btn {
   background: linear-gradient(135deg, #3498db, #2980b9);
   color: white;
@@ -711,6 +963,32 @@ export default {
   transition: all 0.3s ease;
   min-width: 80rpx;
   flex-shrink: 0;
+}
+
+/* 2025-07-25: 微信登录按钮样式 */
+.login-btn {
+  background: linear-gradient(135deg, #07c160, #06a554);
+  color: white;
+  border: none;
+  border-radius: 15rpx;
+  padding: 10rpx 18rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 10rpx rgba(7, 193, 96, 0.3);
+  transition: all 0.3s ease;
+  min-width: 80rpx;
+  flex-shrink: 0;
+}
+
+.login-btn:disabled {
+  background: linear-gradient(135deg, #a8a9aa, #8c8c8c);
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.1);
+  opacity: 0.6;
+}
+
+.login-btn:hover:not(:disabled) {
+  transform: translateY(-2rpx);
+  box-shadow: 0 8rpx 20rpx rgba(7, 193, 96, 0.4);
 }
 
 .edit-btn {
@@ -1154,6 +1432,39 @@ button:last-child {
 .customize-btn:hover {
   transform: translateY(-2rpx);
   box-shadow: 0 8rpx 20rpx rgba(52, 152, 219, 0.4);
+}
+
+/* 房间ID输入框样式 - 2025-07-25: 添加房间ID输入的特殊样式 */
+.room-id-input {
+  text-align: center;
+  font-size: 36rpx;
+  font-weight: 600;
+  letter-spacing: 4rpx;
+  color: #2c3e50;
+  background: rgba(255, 255, 255, 0.98);
+  border: 3rpx solid rgba(0, 122, 255, 0.3);
+}
+
+.room-id-input:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.1);
+  transform: translateY(-2rpx);
+}
+
+/* 输入提示样式 */
+.input-hint {
+  margin-top: 15rpx;
+  text-align: center;
+  padding: 10rpx 15rpx;
+  background: rgba(46, 204, 113, 0.1);
+  border-radius: 12rpx;
+  border: 1rpx solid rgba(46, 204, 113, 0.2);
+}
+
+.input-hint text {
+  font-size: 24rpx;
+  color: #27ae60;
+  line-height: 1.4;
 }
 
 /* 响应式设计优化 */
