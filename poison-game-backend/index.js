@@ -115,6 +115,7 @@ class Game {
       roomId: this.roomId, 
       playerId: id, 
       playerName: name,
+      avatarEmoji: avatarEmoji,
       currentStatus: this.status,
       gameStarted: this.gameStarted,
       currentPlayers: this.players.length,
@@ -592,6 +593,11 @@ wss.on('connection', (ws, req) => {
       debugLog('收到消息:', { clientId, data });
       const action = data.action || data.type;
       const { roomId, x, y, boardSize, playerCount, name, avatarEmoji } = data;
+      
+      // 2025-07-25: 调试头像参数
+      if (action === 'create' || action === 'join') {
+        debugLog('玩家信息:', { name, avatarEmoji, hasAvatar: !!avatarEmoji });
+      }
       let game = games.get(roomId);
 
       if (!data.clientId || data.clientId !== clientId) {
@@ -601,12 +607,13 @@ wss.on('connection', (ws, req) => {
       }
 
       if (action === 'create') {
-        debugLog('处理 create 请求:', { clientId, boardSize, playerCount, name });
-        if (boardSize < 5 || boardSize > 10 || playerCount < 2 || playerCount > 5 || !name) {
-          debugWarn('创建房间失败，无效参数:', { clientId, boardSize, playerCount, name });
-          send(clientId, { type: 'error', message: '无效的棋盘、玩家数或昵称' });
-          return;
-        }
+        try {
+          debugLog('处理 create 请求:', { clientId, boardSize, playerCount, name, avatarEmoji });
+          if (boardSize < 5 || boardSize > 10 || playerCount < 2 || playerCount > 5 || !name) {
+            debugWarn('创建房间失败，无效参数:', { clientId, boardSize, playerCount, name });
+            send(clientId, { type: 'error', message: '无效的棋盘、玩家数或昵称' });
+            return;
+          }
         // 2025-07-25: 修复房间ID重复问题 - 使用UUID确保唯一性，同时生成用户友好的短ID
         let newRoomId;
         let attempts = 0;
@@ -634,23 +641,32 @@ wss.on('connection', (ws, req) => {
         games.set(newRoomId, game);
         debugLog('创建房间成功:', { roomId: newRoomId, boardSize, playerCount, clientId });
         const state = game.getState();
-        const message = { type: 'gameCreated', roomId: newRoomId, boardSize, playerCount, state, players: game.players };
-        broadcast(newRoomId, message);
-        debugLog('广播 gameCreated:', { roomId: newRoomId, clientId, message });
+          const message = { type: 'gameCreated', roomId: newRoomId, boardSize, playerCount, state, players: game.players };
+          broadcast(newRoomId, message);
+          debugLog('广播 gameCreated:', { roomId: newRoomId, clientId, message });
+        } catch (createError) {
+          debugError('创建房间失败:', createError);
+          send(clientId, { type: 'error', message: '服务器内部错误' });
+        }
       } else if (action === 'join') {
-        if (!game) {
-          debugWarn('加入房间失败，房间不存在:', { clientId, roomId });
-          send(clientId, { type: 'error', message: '房间不存在' });
-          return;
+        try {
+          if (!game) {
+            debugWarn('加入房间失败，房间不存在:', { clientId, roomId });
+            send(clientId, { type: 'error', message: '房间不存在' });
+            return;
+          }
+          const addResult = game.addPlayer(clientId, name, avatarEmoji);
+          if (!addResult.success) {
+            debugWarn('添加玩家失败:', { clientId, message: addResult.message });
+            send(clientId, { type: 'error', message: addResult.message });
+            return;
+          }
+          debugLog('玩家加入:', { clientId, roomId, name, avatarEmoji });
+          broadcast(roomId, { type: 'playerJoined', success: true, state: game.getState(), players: game.players });
+        } catch (joinError) {
+          debugError('加入房间失败:', joinError);
+          send(clientId, { type: 'error', message: '服务器内部错误' });
         }
-        const addResult = game.addPlayer(clientId, name, avatarEmoji);
-        if (!addResult.success) {
-          debugWarn('添加玩家失败:', { clientId, message: addResult.message });
-          send(clientId, { type: 'error', message: addResult.message });
-          return;
-        }
-        debugLog('玩家加入:', { clientId, roomId, name });
-        broadcast(roomId, { type: 'playerJoined', success: true, state: game.getState(), players: game.players });
       } else if (action === 'setPoison') {
         if (!game) {
           debugWarn('设置毒药失败，房间不存在:', { clientId, roomId });
