@@ -488,11 +488,13 @@ export default {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
           // 2025-07-25: 使用统一的clientId生成方法
-          this.clientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
+          const newClientId = this.generateUniqueClientId();
+          uni.setStorageSync('clientId', newClientId);
+          console.log('生成新 clientId:', newClientId);
+          await connect(newClientId);
+          // 2025-07-25: 连接成功后更新实例变量，确保消息发送时使用正确的clientId
+          this.clientId = newClientId;
+          console.log('WebSocket 重新连接成功，更新clientId:', this.clientId);
           if (this.removeMessageCallback) {
             this.removeMessageCallback();
           }
@@ -586,11 +588,13 @@ export default {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
           // 2025-07-25: 使用统一的clientId生成方法
-          this.clientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
+          const newClientId = this.generateUniqueClientId();
+          uni.setStorageSync('clientId', newClientId);
+          console.log('生成新 clientId:', newClientId);
+          await connect(newClientId);
+          // 2025-07-25: 连接成功后更新实例变量，确保消息发送时使用正确的clientId
+          this.clientId = newClientId;
+          console.log('WebSocket 重新连接成功，更新clientId:', this.clientId);
           if (this.removeMessageCallback) {
             this.removeMessageCallback();
           }

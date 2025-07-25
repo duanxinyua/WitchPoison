@@ -39,6 +39,8 @@ export async function connect(clientId) {
   if (socketTask) {
     console.log('检测到现有 WebSocket 连接，关闭旧连接', { clientId, readyState: socketTask.readyState });
     closeWebSocket();
+    // 2025-07-25: 确保连接状态完全重置
+    isConnecting = false;
     await new Promise(resolve => setTimeout(resolve, 500)); // 等待关闭完成
   }
 
@@ -91,6 +93,15 @@ export async function connect(clientId) {
         const timeout = setTimeout(() => {
           console.error('WebSocket 连接超时', { clientId });
           isConnecting = false;
+          // 2025-07-25: 连接超时时清理socketTask，避免状态不一致
+          if (socketTask) {
+            try {
+              socketTask.close();
+            } catch (e) {
+              console.warn('关闭超时连接失败:', e);
+            }
+            socketTask = null;
+          }
           reject(new Error('WebSocket 连接超时'));
         }, CONNECT_TIMEOUT);
 
