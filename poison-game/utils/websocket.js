@@ -98,8 +98,22 @@ export async function connect(clientId) {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           clearTimeout(timeout);
           isConnecting = false;
+          
+          // 2025-07-25: 修复时序问题 - 确保状态同步后再绑定处理器
+          // 立即绑定消息处理器，不依赖readyState
           bindMessageHandler();
-          startHeartbeat(clientId);
+          
+          // 延迟启动心跳，确保连接完全建立
+          setTimeout(() => {
+            startHeartbeat(clientId);
+            console.log('WebSocket 连接完全建立', {
+              clientId,
+              readyState: socketTask?.readyState,
+              messageHandlerBound: socketTask?.onMessageBound,
+              callbackCount: messageCallbacks.length
+            });
+          }, 100);
+          
           resolve();
         });
 
@@ -135,8 +149,18 @@ export async function connect(clientId) {
   return Promise.reject(lastError || new Error('WebSocket 连接失败'));
 }
 
+/**
+ * 绑定WebSocket消息处理器
+ * 2025-07-25: 优化绑定逻辑，移除状态检查依赖
+ */
 function bindMessageHandler() {
-  if (socketTask && socketTask.readyState === 1 && !socketTask.onMessageBound) {
+  // 移除readyState检查，只要socketTask存在且未绑定就进行绑定
+  if (socketTask && !socketTask.onMessageBound) {
+    console.log('开始绑定WebSocket消息处理器', {
+      hasSocketTask: !!socketTask,
+      readyState: socketTask.readyState,
+      alreadyBound: socketTask.onMessageBound
+    });
     socketTask.onMessage((res) => {
       try {
         const data = JSON.parse(res.data);
@@ -165,7 +189,16 @@ function bindMessageHandler() {
       }
     });
     socketTask.onMessageBound = true;
-    console.log('绑定 WebSocket 消息处理');
+    console.log('WebSocket 消息处理器绑定完成', {
+      callbackCount: messageCallbacks.length,
+      readyState: socketTask.readyState
+    });
+  } else {
+    console.log('跳过消息处理器绑定', {
+      hasSocketTask: !!socketTask,
+      alreadyBound: socketTask?.onMessageBound,
+      readyState: socketTask?.readyState
+    });
   }
 }
 
@@ -198,20 +231,45 @@ export function sendMessage(data) {
   }
 }
 
+/**
+ * 注册WebSocket消息回调
+ * 2025-07-25: 重新优化注册逻辑，解决时序问题和状态检查
+ * @param {Function} callback - 消息处理回调函数
+ * @returns {Function} - 用于移除回调的函数
+ */
 export function onMessage(callback) {
-  if (!socketTask || socketTask.readyState !== 1) {
-    console.warn('WebSocket 未初始化或未连接，无法注册回调', {
-      socketTask: !!socketTask,
-      readyState: socketTask?.readyState,
-    });
+  if (typeof callback !== 'function') {
+    console.error('onMessage: callback 必须是函数');
     return () => {};
   }
 
+  // 直接注册回调到队列中，不依赖当前连接状态
   messageCallbacks.push(callback);
-  console.log('注册消息回调，当前回调数:', messageCallbacks.length);
+  console.log('注册新消息回调');
+  
+  // 输出当前状态信息用于调试
+  const statusInfo = {
+    callbackCount: messageCallbacks.length,
+    hasSocketTask: !!socketTask,
+    readyState: socketTask?.readyState,
+    isConnecting: isConnecting
+  };
+  
+  if (!socketTask) {
+    console.log('WebSocket尚未创建，回调已排队等待', statusInfo);
+  } else if (socketTask.readyState === 1) {
+    console.log('WebSocket已连接，回调立即生效', statusInfo);
+  } else {
+    console.log('WebSocket连接中，回调已注册等待连接完成', statusInfo);
+  }
+
+  // 返回移除回调的函数
   return () => {
-    messageCallbacks = messageCallbacks.filter((cb) => cb !== callback);
-    console.log('移除消息回调，剩余回调数:', messageCallbacks.length);
+    const index = messageCallbacks.indexOf(callback);
+    if (index > -1) {
+      messageCallbacks.splice(index, 1);
+      console.log('移除消息回调，剩余回调数:', messageCallbacks.length);
+    }
   };
 }
 

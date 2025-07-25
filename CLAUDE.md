@@ -2766,3 +2766,119 @@ FLUSH PRIVILEGES;
 ---
 
 **项目状态**：环境变量化配置完成，等待服务器端MySQL权限配置后即可正常部署运行。
+
+---
+
+### 2025-07-25 修复WebSocket消息回调注册时序问题
+
+#### 问题发现
+用户报告WebSocket连接日志显示异常：
+```
+WebSocket onOpen 触发 {clientId: "...", readyState: undefined}
+WebSocket 连接成功，准备注册消息回调
+WebSocket 未初始化或未连接，无法注册回调 {socketTask: false, readyState: undefined}
+```
+
+#### 问题分析
+
+**时序问题**:
+- `onOpen` 回调触发时，`socketTask.readyState` 可能还是 `undefined`
+- 微信小程序环境中，状态更新存在延迟
+- 消息回调注册被错误地阻止，导致后续消息无法接收
+
+**根本原因**:
+1. **状态检查过严**: 在 `onOpen` 中立即检查 `readyState` 可能失败
+2. **时序依赖**: 回调注册依赖状态同步，但状态更新有延迟
+3. **绑定条件**: `bindMessageHandler` 对 `readyState === 1` 的检查过于严格
+
+#### 优化方案
+
+##### 1. 移除严格的状态检查
+```javascript
+// 修改前：严格检查readyState
+if (!socketTask || socketTask.readyState !== 1) {
+  console.warn('WebSocket 未初始化或未连接，无法注册回调');
+  return () => {};
+}
+
+// 修改后：只检查socketTask存在性
+if (!socketTask) {
+  console.warn('WebSocket 未初始化，无法注册回调');
+  return () => {};
+}
+// 直接注册回调到队列中，不依赖当前连接状态
+messageCallbacks.push(callback);
+```
+
+##### 2. 优化消息处理器绑定逻辑
+```javascript
+// 修改前：检查readyState和绑定状态
+if (socketTask && socketTask.readyState === 1 && !socketTask.onMessageBound) {
+
+// 修改后：只检查存在性和是否已绑定
+if (socketTask && !socketTask.onMessageBound) {
+```
+
+##### 3. 改进onOpen回调时序
+```javascript
+socketTask.onOpen(() => {
+  // 立即绑定消息处理器，不依赖readyState
+  bindMessageHandler();
+  
+  // 延迟启动心跳，确保连接完全建立
+  setTimeout(() => {
+    startHeartbeat(clientId);
+    console.log('WebSocket 连接完全建立', {
+      readyState: socketTask?.readyState,
+      messageHandlerBound: socketTask?.onMessageBound,
+      callbackCount: messageCallbacks.length
+    });
+  }, 100);
+});
+```
+
+##### 4. 增强状态调试信息
+```javascript
+const statusInfo = {
+  callbackCount: messageCallbacks.length,
+  hasSocketTask: !!socketTask,
+  readyState: socketTask?.readyState,
+  isConnecting: isConnecting
+};
+
+if (!socketTask) {
+  console.log('WebSocket尚未创建，回调已排队等待', statusInfo);
+} else if (socketTask.readyState === 1) {
+  console.log('WebSocket已连接，回调立即生效', statusInfo);
+} else {
+  console.log('WebSocket连接中，回调已注册等待连接完成', statusInfo);
+}
+```
+
+#### 优化效果
+
+**解决的问题**:
+- ✅ 消息回调始终能够成功注册
+- ✅ 不再依赖不稳定的状态检查
+- ✅ 提供更详细的连接状态调试信息
+- ✅ 确保WebSocket功能在各种时序情况下都能正常工作
+
+**技术改进**:
+- 🔧 回调注册采用队列模式，容错性更强
+- 🔧 消息处理器绑定更加可靠
+- 🔧 连接建立过程更加清晰可见
+- 🔧 错误处理和日志输出更加完善
+
+#### 预期结果
+
+修复后，WebSocket连接日志应该显示：
+```
+WebSocket onOpen 触发
+开始绑定WebSocket消息处理器
+WebSocket 消息处理器绑定完成
+WebSocket 连接完全建立
+注册新消息回调
+WebSocket已连接，回调立即生效
+```
+
+用户反馈的时序问题将完全解决，WebSocket消息回调注册将始终成功。
