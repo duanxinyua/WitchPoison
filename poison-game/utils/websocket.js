@@ -109,16 +109,21 @@ export async function connect(clientId) {
           // 立即绑定消息处理器
           bindMessageHandler();
           
-          // 延迟启动心跳，确保连接完全建立
+          // 延迟启动心跳和状态确认
           setTimeout(() => {
             // 再次检查socketTask有效性
-            if (socketTask) {
+            if (socketTask && socketTask.readyState === 1) {
               startHeartbeat(clientId);
               console.log('WebSocket 连接完全建立', {
                 clientId,
-                readyState: socketTask?.readyState,
-                messageHandlerBound: socketTask?.onMessageBound,
+                readyState: socketTask.readyState,
+                messageHandlerBound: socketTask.onMessageBound,
                 callbackCount: messageCallbacks.length
+              });
+            } else {
+              console.warn('WebSocket状态异常，连接可能不稳定', {
+                hasSocketTask: !!socketTask,
+                readyState: socketTask?.readyState
               });
             }
           }, 100);
@@ -138,7 +143,7 @@ export async function connect(clientId) {
           console.log('WebSocket 连接关闭:', event, { clientId });
           stopHeartbeat();
           socketTask = null;
-          messageCallbacks = [];
+          // 不清空messageCallbacks，保留回调以便重连后继续使用
           isConnecting = false;
         });
       });
@@ -179,38 +184,42 @@ function bindMessageHandler() {
     readyState: socketTask.readyState,
     alreadyBound: socketTask.onMessageBound
   });
-    socketTask.onMessage((res) => {
-      try {
-        const data = JSON.parse(res.data);
-        console.log('收到 WebSocket 消息:', data, { callbackCount: messageCallbacks.length });
+  
+  socketTask.onMessage((res) => {
+    try {
+      const data = JSON.parse(res.data);
+      console.log('收到 WebSocket 消息:', data, { callbackCount: messageCallbacks.length });
 
-        if (!data.type) {
-          console.error('消息缺少 type 字段:', data);
-          return;
-        }
-
-        if (data.type === 'connected') {
-          console.log('收到连接确认:', { clientId: data.clientId });
-        } else if (data.type === 'pong') {
-          console.log('收到心跳响应:', data);
-        } else {
-          messageCallbacks.forEach((cb) => {
-            try {
-              cb(data);
-            } catch (error) {
-              console.error('消息回调执行失败:', error, { data });
-            }
-          });
-        }
-      } catch (error) {
-        console.error('解析 WebSocket 消息失败:', error, { rawData: res.data });
+      if (!data.type) {
+        console.error('消息缺少 type 字段:', data);
+        return;
       }
-    });
-    socketTask.onMessageBound = true;
-    console.log('WebSocket 消息处理器绑定完成', {
-      callbackCount: messageCallbacks.length,
-      readyState: socketTask.readyState
-    });
+
+      if (data.type === 'connected') {
+        console.log('收到连接确认:', { clientId: data.clientId });
+      } else if (data.type === 'pong') {
+        console.log('收到心跳响应:', data);
+      } else {
+        // 创建回调副本，避免执行过程中数组被修改
+        const callbacks = [...messageCallbacks];
+        callbacks.forEach((cb) => {
+          try {
+            cb(data);
+          } catch (error) {
+            console.error('消息回调执行失败:', error, { data });
+          }
+        });
+      }
+    } catch (error) {
+      console.error('解析 WebSocket 消息失败:', error, { rawData: res.data });
+    }
+  });
+  
+  socketTask.onMessageBound = true;
+  console.log('WebSocket 消息处理器绑定完成', {
+    callbackCount: messageCallbacks.length,
+    readyState: socketTask.readyState
+  });
 }
 
 /**
@@ -313,25 +322,60 @@ export function closeWebSocket() {
   console.log('WebSocket 已清理');
 }
 
+/**
+ * 启动心跳机制
+ * 2025-07-25: 优化心跳逻辑，添加连接检查和错误处理
+ * @param {string} clientId - 客户端ID
+ */
 function startHeartbeat(clientId) {
+  // 停止已有的心跳定时器
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
+  
+  // 验证参数
+  if (!clientId) {
+    console.warn('startHeartbeat: clientId缺失，跳过心跳启动');
+    return;
+  }
+  
   heartbeatTimer = setInterval(() => {
-    if (socketTask && socketTask.readyState === 1) {
+    if (!socketTask) {
+      console.warn('心跳检查: socketTask不存在，停止心跳');
+      stopHeartbeat();
+      return;
+    }
+    
+    if (socketTask.readyState === 1) {
       console.log('发送心跳:', { clientId });
-      sendMessage({ action: 'ping', clientId });
+      const success = sendMessage({ action: 'ping', clientId });
+      if (!success) {
+        console.warn('心跳发送失败，停止心跳机制');
+        stopHeartbeat();
+      }
     } else {
-      console.warn('心跳失败，WebSocket 未连接', { readyState: socketTask?.readyState });
+      console.warn('心跳检查: WebSocket未连接', { 
+        readyState: socketTask.readyState,
+        clientId 
+      });
       stopHeartbeat();
     }
   }, HEARTBEAT_INTERVAL);
+  
+  console.log('心跳机制已启动', { clientId, interval: HEARTBEAT_INTERVAL });
 }
 
+/**
+ * 停止心跳机制
+ * 2025-07-25: 添加状态检查和日志
+ */
 function stopHeartbeat() {
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
     console.log('停止心跳');
+  } else {
+    console.log('心跳机制未启动，无需停止');
   }
 }
