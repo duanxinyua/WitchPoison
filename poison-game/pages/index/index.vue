@@ -269,21 +269,25 @@ export default {
      * @returns {string} 唯一的客户端ID
      */
     generateUniqueClientId() {
-      // 使用时间戳 + 随机字符串 + 设备信息生成唯一ID
+      // 2025-07-25: 增强clientId唯一性 - 添加毫秒级时间戳和更长随机字符串
       const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substr(2, 12);
+      const microTimestamp = performance.now().toString().replace('.', ''); // 添加高精度时间戳
+      const randomStr1 = Math.random().toString(36).substr(2, 8); // 第一个随机字符串
+      const randomStr2 = Math.random().toString(36).substr(2, 8); // 第二个随机字符串
       const deviceInfo = wx.getSystemInfoSync?.() || {};
-      const rawDeviceId = deviceInfo.brand || deviceInfo.model || 'unknown';
+      const rawDeviceId = deviceInfo.brand || deviceInfo.model || deviceInfo.platform || 'unknown';
       
       // 2025-07-25: 确保设备ID只包含URL安全字符 - 移除所有特殊字符
       const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
       
-      // 组合生成唯一ID，确保格式统一
-      const clientId = `client_${timestamp}_${randomStr}_${deviceId}`;
+      // 组合生成唯一ID，确保格式统一和高度唯一性
+      const clientId = `client_${timestamp}_${microTimestamp}_${randomStr1}_${randomStr2}_${deviceId}`;
       
       console.log('生成唯一clientId:', {
         timestamp,
-        randomStr,
+        microTimestamp,
+        randomStr1,
+        randomStr2,
         rawDeviceId,
         cleanDeviceId: deviceId,
         finalId: clientId,
@@ -416,24 +420,39 @@ export default {
       const isValidClientId = existingClientId && 
                              existingClientId.length > 0 && 
                              existingClientId.startsWith('client_') &&
-                             existingClientId.split('_').length >= 4;
+                             existingClientId.split('_').length >= 6; // 2025-07-25: 更新验证规则，匹配新的ID格式
                              
       // 检查clientId是否过期（超过24小时强制更新）
       const clientIdExpired = existingClientId && existingClientId.includes('_') && 
                               (now - parseInt(existingClientId.split('_')[1]) > 24 * 60 * 60 * 1000);
       
+      // 2025-07-25: 优化clientId复用逻辑 - 减少重复生成，增强稳定性
       if (isValidClientId && !clientIdExpired) {
         this.clientId = existingClientId;
-        console.log('使用已存在的有效 clientId:', this.clientId);
+        console.log('使用已存在的有效 clientId:', {
+          clientId: this.clientId,
+          age: Math.round((now - parseInt(existingClientId.split('_')[1])) / 1000 / 60), // 分钟
+          parts: existingClientId.split('_').length
+        });
       } else {
         if (clientIdExpired) {
-          console.log('clientId已过期，生成新的:', existingClientId);
+          console.log('clientId已过期，生成新的:', { 
+            old: existingClientId,
+            ageHours: Math.round((now - parseInt(existingClientId.split('_')[1])) / 1000 / 60 / 60)
+          });
         } else if (!isValidClientId) {
-          console.log('无效的clientId格式，生成新的:', existingClientId);
+          console.log('无效的clientId格式，生成新的:', {
+            old: existingClientId,
+            length: existingClientId?.length,
+            hasPrefix: existingClientId?.startsWith('client_'),
+            partCount: existingClientId?.split('_').length
+          });
         }
+        
+        // 生成新的clientId并立即保存，避免并发问题
         this.clientId = this.generateUniqueClientId();
         uni.setStorageSync('clientId', this.clientId);
-        console.log('生成新的 clientId:', this.clientId);
+        console.log('生成并保存新的 clientId:', this.clientId);
       }
       try {
         await connect(this.clientId);
@@ -723,11 +742,20 @@ export default {
             this.$set(this, 'showJoinRoomModal', false);
             this.$set(this, 'hasNavigated', false);
             if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
-              console.warn('clientId 无效，重新初始化 WebSocket');
+              console.warn('clientId 冲突，延迟后重新尝试:', {
+                message: data.message,
+                currentClientId: this.clientId,
+                timestamp: Date.now()
+              });
+              
+              // 2025-07-25: 优化clientId冲突处理 - 延迟重试避免快速重复生成
               closeWebSocket();
-              uni.removeStorageSync('clientId');
-              this.clientId = '';
-              this.initWebSocket();
+              setTimeout(async () => {
+                uni.removeStorageSync('clientId');
+                this.clientId = '';
+                console.log('延迟重新初始化WebSocket，避免ID冲突');
+                await this.initWebSocket();
+              }, 1000 + Math.random() * 2000); // 随机延迟1-3秒
             }
           } else if (data.type === 'leftRoom') {
             console.log('收到 leftRoom 确认:', data);
