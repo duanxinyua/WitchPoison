@@ -2568,3 +2568,68 @@ FLUSH PRIVILEGES;
 - 数据库端口13306是非标准端口，确认是否为宝塔面板的特殊配置
 - 环境变量配置已正确，主要问题在于服务器端的数据库认证
 - 需要在服务器上直接验证数据库连接
+
+---
+
+### 2025-07-25 修复Docker/容器环境数据库连接问题
+
+#### 问题发现
+第二次启动失败，错误信息变化：
+```
+ER_ACCESS_DENIED_ERROR: Access denied for user 'root'@'172.18.0.1' (using password: YES)
+```
+
+#### 关键发现
+
+**网络环境问题**:
+- **连接来源**: `172.18.0.1` (Docker网络地址)
+- **不是**: `localhost` 或 `127.0.0.1`
+- **原因**: 服务器运行在Docker容器或特殊网络环境中
+
+**Docker网络特征**:
+- `172.18.0.1` 是典型的Docker bridge网络地址
+- MySQL看到的连接来源不是本地地址
+- 需要为容器IP地址配置数据库用户权限
+
+#### 解决方案
+
+**方案1: 修改连接主机**
+```bash
+# 尝试直接IP连接而不是localhost
+DB_HOST=127.0.0.1  # 而不是 localhost
+```
+
+**方案2: 数据库用户权限配置**
+服务器端需要执行以下SQL命令：
+```sql
+-- 为Docker网络地址创建用户权限
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'root'@'172.18.0.1' IDENTIFIED BY 'root';
+
+-- 或者更宽泛的权限配置
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'root'@'172.18.%' IDENTIFIED BY 'root';
+
+-- 或者允许任何IP连接（不推荐生产环境）
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'root'@'%' IDENTIFIED BY 'root';
+
+FLUSH PRIVILEGES;
+```
+
+**方案3: 创建专用数据库用户**
+```sql
+-- 创建专用用户
+CREATE USER 'witchgame'@'%' IDENTIFIED BY 'secure_password_2025';
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'witchgame'@'%';
+FLUSH PRIVILEGES;
+```
+
+#### 推荐解决步骤
+
+1. **立即尝试**: 修改 `DB_HOST=127.0.0.1`
+2. **如果仍失败**: 在MySQL中执行权限配置SQL
+3. **最佳实践**: 创建专用数据库用户而不是使用root
+
+#### Docker环境特点
+
+- 容器内应用连接宿主机MySQL时，MySQL看到的来源IP是容器网络IP
+- `localhost` 在容器环境中指向容器内部，不是宿主机
+- 需要配置MySQL用户允许从容器网络连接
