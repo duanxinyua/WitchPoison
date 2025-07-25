@@ -26,9 +26,18 @@ router.post('/wechat-login', async (req, res) => {
   try {
     const { code, userInfo } = req.body;
 
+    // 获取客户端IP地址
+    const clientIp = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress || 
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
+                     req.ip;
+
     console.log('[Auth] 收到微信登录请求:', { 
       code: code ? '***' : null, 
       userInfo: userInfo ? { nickname: userInfo.nickname } : null,
+      clientIp: clientIp,
       configStatus: wechatApi.getConfigStatus()
     });
 
@@ -39,8 +48,8 @@ router.post('/wechat-login', async (req, res) => {
       });
     }
 
-    // 使用新的微信API服务进行登录
-    const user = await User.loginByWechatCode(code, userInfo);
+    // 使用新的微信API服务进行登录，传入IP地址
+    const user = await User.loginByWechatCode(code, userInfo, clientIp);
 
     // 生成会话令牌
     const sessionData = await User.generateSessionToken(user);
@@ -96,10 +105,18 @@ router.post('/guest-login', async (req, res) => {
   try {
     const { clientId } = req.body;
 
-    console.log('[Auth] 收到游客登录请求, clientId:', clientId);
+    // 获取客户端IP地址
+    const clientIp = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress || 
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
+                     req.ip;
 
-    // 创建游客用户
-    const guestUser = await User.createGuest(clientId);
+    console.log('[Auth] 收到游客登录请求:', { clientId, clientIp });
+
+    // 创建游客用户，传入IP地址
+    const guestUser = await User.createGuest(clientId, clientIp);
 
     // 生成会话令牌
     const sessionData = await User.generateSessionToken(guestUser);

@@ -21,12 +21,13 @@ const JWT_SECRET = 'witch_poison_game_jwt_secret_2025';
 class User {
   /**
    * 通过微信code登录用户
-   * 2025-07-25: 使用微信官方API完整登录流程
+   * 2025-07-25: 使用微信官方API完整登录流程，支持用户信息层级化管理
    * @param {string} jsCode - 微信登录code
-   * @param {Object} userInfo - 用户基本信息
+   * @param {Object} userInfo - 用户基本信息（可能包含前端缓存的自定义信息）
+   * @param {string} loginIp - 用户登录IP地址
    * @returns {Promise<Object>} 用户信息
    */
-  static async loginByWechatCode(jsCode, userInfo = {}) {
+  static async loginByWechatCode(jsCode, userInfo = {}, loginIp = null) {
     try {
       console.log('[User] 微信code登录流程开始');
 
@@ -40,17 +41,19 @@ class User {
       const { openid, session_key, unionid } = wechatResult;
       console.log('[User] 微信API调用成功:', { openid, hasSessionKey: !!session_key });
 
-      // 2. 查找或创建用户
+      // 2. 查找或创建用户，传入前端的自定义信息和IP
       const wechatUserInfo = {
         openid,
         unionid,
         session_key,
-        nickname: userInfo.nickname || this.generateRandomNickname(),
+        clientNickname: userInfo.nickname, // 前端传来的昵称（可能是自定义的）
+        clientAvatarEmoji: userInfo.avatarEmoji, // 前端传来的头像
         avatar_url: userInfo.avatar_url || userInfo.avatarUrl || '',
         gender: userInfo.gender || 0,
         city: userInfo.city || '',
         province: userInfo.province || '',
-        country: userInfo.country || ''
+        country: userInfo.country || '',
+        loginIp: loginIp
       };
 
       return await this.findOrCreateByWechat(wechatUserInfo);
@@ -63,7 +66,8 @@ class User {
 
   /**
    * 通过微信openid查找或创建用户
-   * 2025-07-25: 微信小程序登录的核心逻辑，增强session_key管理
+   * 2025-07-25: 微信小程序登录的核心逻辑，实现用户信息层级化管理
+   * 优先级: 数据库自定义信息 -> 前端缓存信息 -> 随机生成 -> 保存到数据库和返回给前端
    * @param {Object} wechatUserInfo - 微信用户信息
    * @returns {Promise<Object>} 用户信息
    */
@@ -73,22 +77,24 @@ class User {
         openid,
         unionid,
         session_key,
-        nickname,
+        clientNickname,
+        clientAvatarEmoji,
         avatar_url,
         gender,
         city,
         province,
-        country
+        country,
+        loginIp
       } = wechatUserInfo;
 
-      console.log('[User] 查找或创建微信用户:', { openid, nickname });
+      console.log('[User] 查找或创建微信用户:', { openid, clientNickname });
 
       // 首先尝试查找现有用户
       let existingUser = await this.findByOpenid(openid);
       
       if (existingUser) {
-        // 更新现有用户信息和session_key
-        console.log('[User] 用户已存在，更新信息和session_key');
+        // 用户已存在，更新session_key和登录信息
+        console.log('[User] 用户已存在，检查自定义信息和更新登录状态');
         
         // 检查现有session_key是否仍然有效
         if (existingUser.session_key && existingUser.session_key !== session_key) {
@@ -100,35 +106,80 @@ class User {
             await wechatApi.resetUserSessionKey(openid, existingUser.session_key);
           }
         }
+
+        // 实现用户信息层级化逻辑
+        let finalNickname, finalAvatarEmoji;
+        
+        if (existingUser.has_customized && existingUser.custom_nickname && existingUser.custom_avatar_emoji) {
+          // 1. 优先使用数据库中的自定义信息
+          finalNickname = existingUser.custom_nickname;
+          finalAvatarEmoji = existingUser.custom_avatar_emoji;
+          console.log('[User] 使用数据库自定义信息:', { finalNickname, finalAvatarEmoji });
+        } else if (clientNickname && clientAvatarEmoji) {
+          // 2. 使用前端缓存的自定义信息，并保存到数据库
+          finalNickname = clientNickname;
+          finalAvatarEmoji = clientAvatarEmoji;
+          console.log('[User] 使用前端缓存信息并保存到数据库:', { finalNickname, finalAvatarEmoji });
+          
+          // 保存到数据库作为自定义信息
+          await this.updateCustomUserInfo(existingUser.id, finalNickname, finalAvatarEmoji);
+        } else {
+          // 3. 没有自定义信息，使用数据库原有信息或生成新的
+          finalNickname = existingUser.nickname || this.generateRandomNickname();
+          finalAvatarEmoji = existingUser.avatar_emoji || this.getRandomAvatar();
+          console.log('[User] 使用原有信息或随机生成:', { finalNickname, finalAvatarEmoji });
+        }
         
         const updatedUser = await this.updateWechatInfo(existingUser.id, {
           session_key,
-          nickname: nickname || existingUser.nickname,
+          nickname: finalNickname,
+          avatar_emoji: finalAvatarEmoji,
           avatar_url: avatar_url || existingUser.avatar_url,
           gender: gender !== undefined ? gender : existingUser.gender,
           city: city || existingUser.city,
           province: province || existingUser.province,
           country: country || existingUser.country,
-          last_login_time: new Date()
+          login_ip: loginIp,
+          login_time: new Date()
         });
         
         return updatedUser;
       } else {
-        // 创建新用户
-        console.log('[User] 创建新用户');
+        // 创建新用户 - 实现层级化信息获取
+        console.log('[User] 创建新用户，实现信息层级化');
+        
+        let finalNickname, finalAvatarEmoji, hasCustomized = false;
+        
+        if (clientNickname && clientAvatarEmoji) {
+          // 前端有缓存的自定义信息
+          finalNickname = clientNickname;
+          finalAvatarEmoji = clientAvatarEmoji;
+          hasCustomized = true;
+          console.log('[User] 新用户使用前端缓存信息:', { finalNickname, finalAvatarEmoji });
+        } else {
+          // 随机生成信息
+          finalNickname = this.generateRandomNickname();
+          finalAvatarEmoji = this.getRandomAvatar();
+          console.log('[User] 新用户随机生成信息:', { finalNickname, finalAvatarEmoji });
+        }
+        
         const newUser = await this.create({
           openid,
           unionid,
           session_key,
-          nickname: nickname || this.generateRandomNickname(),
+          nickname: finalNickname,
+          avatar_emoji: finalAvatarEmoji,
           avatar_url,
-          avatar_emoji: '😺',
           gender: gender || 0,
           city,
           province,
           country,
           is_guest: false,
-          last_login_time: new Date()
+          has_customized: hasCustomized,
+          custom_nickname: hasCustomized ? finalNickname : null,
+          custom_avatar_emoji: hasCustomized ? finalAvatarEmoji : null,
+          login_ip: loginIp,
+          login_time: new Date()
         });
         
         return newUser;
@@ -158,14 +209,20 @@ class User {
         city,
         province,
         country,
-        is_guest
+        is_guest,
+        has_customized,
+        custom_nickname,
+        custom_avatar_emoji,
+        login_ip,
+        login_time
       } = userData;
 
       const sql = `
         INSERT INTO users (
           openid, unionid, session_key, nickname, avatar_url, avatar_emoji,
-          gender, city, province, country, is_guest, last_login_time
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          gender, city, province, country, is_guest, has_customized, 
+          custom_nickname, custom_avatar_emoji, login_ip, login_time, last_login_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `;
 
       const params = [
@@ -179,7 +236,12 @@ class User {
         city || null,
         province || null,
         country || null,
-        is_guest || false
+        is_guest || false,
+        has_customized || false,
+        custom_nickname || null,
+        custom_avatar_emoji || null,
+        login_ip || null,
+        login_time || new Date()
       ];
 
       const result = await query(sql, params);
@@ -231,7 +293,7 @@ class User {
 
   /**
    * 更新微信用户信息
-   * 2025-07-25: 更新用户的微信相关信息
+   * 2025-07-25: 更新用户的微信相关信息，包括新的字段
    * @param {number} userId - 用户ID
    * @param {Object} updateData - 更新数据
    * @returns {Promise<Object>} 更新后的用户信息
@@ -241,11 +303,14 @@ class User {
       const {
         session_key,
         nickname,
+        avatar_emoji,
         avatar_url,
         gender,
         city,
         province,
         country,
+        login_ip,
+        login_time,
         last_login_time
       } = updateData;
 
@@ -253,11 +318,14 @@ class User {
         UPDATE users SET 
           session_key = ?,
           nickname = ?,
+          avatar_emoji = ?,
           avatar_url = ?,
           gender = ?,
           city = ?,
           province = ?,
           country = ?,
+          login_ip = ?,
+          login_time = ?,
           last_login_time = ?
         WHERE id = ?
       `;
@@ -265,11 +333,14 @@ class User {
       const params = [
         session_key,
         nickname,
+        avatar_emoji,
         avatar_url,
         gender,
         city,
         province,
         country,
+        login_ip,
+        login_time,
         last_login_time,
         userId
       ];
@@ -291,7 +362,7 @@ class User {
    * @param {string} clientId - 客户端ID
    * @returns {Promise<Object>} 游客用户信息
    */
-  static async createGuest(clientId) {
+  static async createGuest(clientId, loginIp = null) {
     try {
       // 生成游客openid
       const guestOpenid = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -300,10 +371,12 @@ class User {
         openid: guestOpenid,
         nickname: this.generateRandomNickname(),
         avatar_emoji: this.getRandomAvatar(),
-        is_guest: true
+        is_guest: true,
+        login_ip: loginIp,
+        login_time: new Date()
       };
 
-      console.log('[User] 创建游客用户:', guestData);
+      console.log('[User] 创建游客用户:', { ...guestData, login_ip: loginIp });
       return await this.create(guestData);
     } catch (error) {
       console.error('[User] 游客用户创建失败:', error);
@@ -505,6 +578,33 @@ class User {
     } catch (error) {
       console.error('[User] 刷新微信session失败:', error);
       return true; // 出错时要求重新登录，确保安全
+    }
+  }
+
+  /**
+   * 更新用户自定义信息
+   * 2025-07-25: 保存用户自定义的昵称和头像
+   * @param {number} userId - 用户ID
+   * @param {string} customNickname - 自定义昵称
+   * @param {string} customAvatarEmoji - 自定义头像emoji
+   */
+  static async updateCustomUserInfo(userId, customNickname, customAvatarEmoji) {
+    try {
+      const sql = `
+        UPDATE users SET 
+          has_customized = TRUE,
+          custom_nickname = ?,
+          custom_avatar_emoji = ?,
+          nickname = ?,
+          avatar_emoji = ?
+        WHERE id = ?
+      `;
+      
+      await query(sql, [customNickname, customAvatarEmoji, customNickname, customAvatarEmoji, userId]);
+      console.log('[User] 用户自定义信息更新成功:', { userId, customNickname, customAvatarEmoji });
+    } catch (error) {
+      console.error('[User] 用户自定义信息更新失败:', error);
+      throw error;
     }
   }
 
