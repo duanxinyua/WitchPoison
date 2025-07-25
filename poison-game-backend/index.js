@@ -1,40 +1,90 @@
+/**
+ * 女巫的毒药 - 游戏后端服务器
+ * 创建时间: 2025-07-25
+ * 最后修改: 2025-07-25 by Claude
+ * 功能: 提供多人在线游戏的WebSocket服务和HTTP接口
+ * 技术栈: Node.js + Express + WebSocket
+ */
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
+// 调试开关 - 控制日志输出详细程度
+// 2025-07-25: 保持开启状态用于开发调试
 const DEBUG = true;
 
+/**
+ * 调试日志函数 - 普通信息
+ * @param {...any} args - 需要输出的参数
+ */
 function debugLog(...args) {
-  if (DEBUG) console.log(...args);
+  if (DEBUG) console.log(`[${new Date().toISOString()}] [LOG]`, ...args);
 }
 
+/**
+ * 调试警告函数 - 警告信息
+ * @param {...any} args - 需要输出的参数
+ */
 function debugWarn(...args) {
-  if (DEBUG) console.warn(...args);
+  if (DEBUG) console.warn(`[${new Date().toISOString()}] [WARN]`, ...args);
 }
 
+/**
+ * 调试错误函数 - 错误信息
+ * @param {...any} args - 需要输出的参数
+ */
 function debugError(...args) {
-  if (DEBUG) console.error(...args);
+  if (DEBUG) console.error(`[${new Date().toISOString()}] [ERROR]`, ...args);
 }
 
+// Express应用实例
 const app = express();
+// HTTP服务器实例
 const server = http.createServer(app);
+// WebSocket服务器实例
 const wss = new WebSocket.Server({ server });
 
+/**
+ * Game类 - 游戏核心逻辑管理
+ * 创建时间: 2025-07-25
+ * 功能: 管理单个游戏房间的状态、玩家和游戏逻辑
+ * 
+ * 游戏状态流程:
+ * waiting -> settingPoison -> playing -> ended -> waitingForRestart
+ */
 class Game {
+  /**
+   * Game类构造函数
+   * @param {string} roomId - 房间唯一标识符
+   * @param {number} boardSize - 棋盘大小 (5-10)
+   * @param {number} playerCount - 房间最大玩家数量 (2-5)
+   */
   constructor(roomId, boardSize, playerCount) {
-    this.roomId = roomId;
-    this.boardSize = boardSize;
-    this.board = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
-    this.players = [];
-    this.currentPlayerIndex = 0;
-    this.playerCount = playerCount;
-    // 玩家头像emoji数组 - 确保每个头像都不重复，支持更多玩家
+    // 房间基本信息
+    this.roomId = roomId;                    // 房间ID
+    this.boardSize = boardSize;              // 棋盘尺寸
+    this.playerCount = playerCount;          // 房间容量
+    
+    // 游戏状态管理
+    this.board = Array(boardSize).fill().map(() => Array(boardSize).fill(null)); // 棋盘状态二维数组
+    this.players = [];                       // 玩家列表
+    this.currentPlayerIndex = 0;             // 当前回合玩家索引
+    this.gameStarted = false;                // 游戏是否已开始
+    this.status = 'waiting';                 // 游戏当前状态
+    
+    // 玩家头像emoji数组 - 2025-07-25: 确保每个头像都不重复，支持更多玩家
     this.emojis = ['😺', '🐶', '🐰', '🦅', '🐘', '🐸', '🦊', '🐯', '🐨', '🐼'];
-    this.gameStarted = false;
-    this.status = 'waiting';
   }
 
+  /**
+   * 添加玩家到房间
+   * 2025-07-25: 处理玩家加入逻辑，包括重连和状态检查
+   * @param {string} id - 玩家唯一ID
+   * @param {string} name - 玩家昵称
+   * @returns {Object} - 操作结果 {success: boolean, message?: string}
+   */
   addPlayer(id, name) {
     debugLog('尝试加入房间:', { 
       roomId: this.roomId, 
@@ -521,8 +571,23 @@ wss.on('connection', (ws, req) => {
           send(clientId, { type: 'error', message: '无效的棋盘、玩家数或昵称' });
           return;
         }
-        const newRoomId1 = uuidv4();
-        const newRoomId = Math.floor(1000 + Math.random() * 9000).toString();
+        // 2025-07-25: 修复房间ID重复问题 - 使用UUID确保唯一性，同时生成用户友好的短ID
+        let newRoomId;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        // 生成唯一的房间ID，避免重复
+        do {
+          // 生成6位数字ID，比4位更安全，比UUID更用户友好
+          newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
+          attempts++;
+        } while (games.has(newRoomId) && attempts < maxAttempts);
+        
+        // 如果短ID生成失败，使用UUID确保唯一性
+        if (games.has(newRoomId)) {
+          newRoomId = uuidv4().substring(0, 8).toUpperCase(); // 使用UUID前8位
+          debugWarn('短ID生成失败，使用UUID:', { roomId: newRoomId, attempts });
+        }
         game = new Game(newRoomId, boardSize, playerCount);
         const addResult = game.addPlayer(clientId, name);
         if (!addResult.success) {
