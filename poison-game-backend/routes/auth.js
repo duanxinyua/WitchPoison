@@ -57,20 +57,13 @@ router.post('/wechat-login', async (req, res) => {
     console.log('[Auth] 微信登录完成:', {
       userId: user.id,
       nickname: user.nickname,  
-      isGuest: user.is_guest,
-      isDemo: wechatApi.getConfigStatus().isDemo
+      isGuest: user.is_guest
     });
 
     res.json({
       success: true,
-      message: wechatApi.getConfigStatus().isDemo ? '登录成功（演示模式）' : '登录成功',
-      data: {
-        ...sessionData,
-        config: {
-          isDemo: wechatApi.getConfigStatus().isDemo,
-          hasWechatConfig: wechatApi.isConfigValid()
-        }
-      }
+      message: '登录成功',
+      data: sessionData
     });
 
   } catch (error) {

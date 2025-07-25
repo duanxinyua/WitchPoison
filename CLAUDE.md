@@ -1866,3 +1866,162 @@ debugLog('为新玩家分配头像:', {
 #### 总结
 
 此次修复解决了一个典型的JavaScript变量作用域问题，确保了创建房间功能的正常运行。通过将`usedEmojis`变量提升到正确的作用域，避免了在使用自定义头像时的引用错误。同时改进了错误处理和日志记录，提升了代码的健壮性和调试友好性。
+
+---
+
+### 2025-07-25 移除后端演示模式相关代码
+
+#### 问题背景
+后端在微信登录响应中返回演示模式信息，前端收到包含`isDemo: true`和"登录成功（演示模式）"的响应消息，需要移除演示模式逻辑。
+
+#### 修改内容
+
+**修改时间**: 2025-07-25  
+**修改原因**: 简化代码逻辑，移除不需要的演示模式功能
+
+##### 1. 清理认证路由响应 (`poison-game-backend/routes/auth.js`)
+
+**修改前**:
+```javascript
+console.log('[Auth] 微信登录完成:', {
+  userId: user.id,
+  nickname: user.nickname,  
+  isGuest: user.is_guest,
+  isDemo: wechatApi.getConfigStatus().isDemo // ❌ 包含演示模式信息
+});
+
+res.json({
+  success: true,
+  message: wechatApi.getConfigStatus().isDemo ? '登录成功（演示模式）' : '登录成功', // ❌ 演示模式消息
+  data: {
+    ...sessionData,
+    config: {
+      isDemo: wechatApi.getConfigStatus().isDemo, // ❌ 返回演示模式状态
+      hasWechatConfig: wechatApi.isConfigValid()
+    }
+  }
+});
+```
+
+**修改后**:
+```javascript
+console.log('[Auth] 微信登录完成:', {
+  userId: user.id,
+  nickname: user.nickname,  
+  isGuest: user.is_guest // ✅ 移除演示模式日志
+});
+
+res.json({
+  success: true,
+  message: '登录成功', // ✅ 统一登录成功消息
+  data: sessionData // ✅ 简化响应数据，移除config字段
+});
+```
+
+##### 2. 简化微信API服务 (`poison-game-backend/services/wechatApi.js`)
+
+**移除演示模式配置**:
+```javascript
+// 修改前
+const WECHAT_CONFIG = {
+  appid: process.env.WECHAT_APPID || 'demo_appid', // ❌ 演示模式后备值
+  secret: process.env.WECHAT_SECRET || 'demo_secret'
+};
+
+// 修改后  
+const WECHAT_CONFIG = {
+  appid: process.env.WECHAT_APPID, // ✅ 要求必须配置
+  secret: process.env.WECHAT_SECRET
+};
+```
+
+**移除演示模式检查逻辑**:
+移除了以下多处演示模式检查：
+- `code2Session`方法中的模拟数据返回
+- `getAccessToken`方法中的模拟token
+- `checkSessionKey`方法中的模拟验证
+- `resetUserSessionKey`方法中的跳过逻辑
+- `decryptUserData`方法中的模拟数据
+
+**统一替换为配置检查**:
+```javascript
+// 在每个方法开始时添加配置检查
+if (!this.isConfigValid()) {
+  throw new Error('微信配置不完整，请检查WECHAT_APPID和WECHAT_SECRET环境变量');
+}
+```
+
+**优化配置验证方法**:
+```javascript
+// 修改前
+isConfigValid() {
+  return WECHAT_CONFIG.appid !== 'demo_appid' && 
+         WECHAT_CONFIG.secret !== 'demo_secret' &&
+         WECHAT_CONFIG.appid && 
+         WECHAT_CONFIG.secret;
+}
+
+// 修改后
+isConfigValid() {
+  return WECHAT_CONFIG.appid && 
+         WECHAT_CONFIG.secret &&
+         WECHAT_CONFIG.appid.length > 0 &&
+         WECHAT_CONFIG.secret.length > 0;
+}
+```
+
+**简化配置状态方法**:
+```javascript
+// 修改前
+getConfigStatus() {
+  return {
+    isDemo: WECHAT_CONFIG.appid === 'demo_appid', // ❌ 演示模式状态
+    hasAppId: !!WECHAT_CONFIG.appid && WECHAT_CONFIG.appid !== 'demo_appid',
+    hasSecret: !!WECHAT_CONFIG.secret && WECHAT_CONFIG.secret !== 'demo_secret',
+    isValid: this.isConfigValid()
+  };
+}
+
+// 修改后
+getConfigStatus() {
+  return {
+    hasAppId: !!WECHAT_CONFIG.appid, // ✅ 简化检查逻辑
+    hasSecret: !!WECHAT_CONFIG.secret,
+    isValid: this.isConfigValid()
+  };
+}
+```
+
+#### 修改效果
+
+**代码简化**:
+1. **移除演示逻辑**: 删除了所有演示模式相关的if判断和模拟数据
+2. **统一错误处理**: 所有方法在配置无效时抛出明确的错误信息
+3. **清理响应数据**: 登录接口返回简洁的数据结构
+4. **日志优化**: 移除演示模式相关的日志信息
+
+**功能强化**:
+1. **配置要求**: 现在必须正确配置微信参数才能运行
+2. **错误明确**: 配置错误时提供明确的错误提示
+3. **代码一致性**: 所有微信API调用都有统一的配置检查
+
+**维护性提升**:
+1. **代码减少**: 移除了大量演示模式分支代码
+2. **逻辑清晰**: 去除了演示模式和正常模式的混合逻辑
+3. **调试简化**: 减少了调试时的复杂性
+
+#### 影响范围
+
+**后端影响**:
+- 所有微信API调用现在都要求正确的配置
+- 登录接口返回简化的数据结构
+- 移除了演示模式的日志和响应信息
+
+**前端影响**:
+- 不再收到演示模式相关的配置信息
+- 登录成功消息统一为"登录成功"
+- 需要确保微信配置正确，否则会收到配置错误
+
+#### 总结
+
+此次修改彻底移除了演示模式功能，简化了代码逻辑，提高了代码的一致性和可维护性。现在系统要求必须正确配置微信参数，确保了生产环境的规范性。移除演示模式后，代码更加简洁明了，减少了维护成本和潜在的错误源。

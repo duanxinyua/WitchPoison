@@ -14,8 +14,8 @@ const crypto = require('crypto');
 
 // 微信小程序配置
 const WECHAT_CONFIG = {
-  appid: process.env.WECHAT_APPID || 'demo_appid',
-  secret: process.env.WECHAT_SECRET || 'demo_secret'
+  appid: process.env.WECHAT_APPID,
+  secret: process.env.WECHAT_SECRET
 };
 
 // 微信API端点
@@ -56,16 +56,9 @@ class WechatApiService {
     try {
       console.log('[WechatAPI] 开始code2Session流程');
 
-      // 检查是否为演示模式
-      if (WECHAT_CONFIG.appid === 'demo_appid') {
-        console.log('[WechatAPI] 演示模式，返回模拟数据');
-        return {
-          openid: `demo_openid_${Date.now()}`,
-          session_key: `demo_session_${Math.random().toString(36).substr(2, 9)}`,
-          unionid: null,
-          errcode: 0,
-          errmsg: 'ok'
-        };
+      // 检查配置
+      if (!this.isConfigValid()) {
+        throw new Error('微信配置不完整，请检查WECHAT_APPID和WECHAT_SECRET环境变量');
       }
 
       const params = {
@@ -149,11 +142,9 @@ class WechatApiService {
         return this.accessToken;
       }
 
-      // 演示模式
-      if (WECHAT_CONFIG.appid === 'demo_appid') {
-        this.accessToken = 'demo_access_token';
-        this.accessTokenExpiry = Date.now() + 7200 * 1000; // 2小时
-        return this.accessToken;
+      // 检查配置
+      if (!this.isConfigValid()) {
+        throw new Error('微信配置不完整');
       }
 
       console.log('[WechatAPI] 获取新的access_token');
@@ -204,10 +195,9 @@ class WechatApiService {
     try {
       console.log('[WechatAPI] 检查session_key有效性:', { openid });
 
-      // 演示模式始终返回有效
-      if (WECHAT_CONFIG.appid === 'demo_appid') {
-        console.log('[WechatAPI] 演示模式，session_key有效');
-        return true;
+      // 检查配置
+      if (!this.isConfigValid()) {
+        throw new Error('微信配置不完整');
       }
 
       // 获取access_token
@@ -281,10 +271,9 @@ class WechatApiService {
     try {
       console.log('[WechatAPI] 重置用户session_key:', { openid });
 
-      // 演示模式
-      if (WECHAT_CONFIG.appid === 'demo_appid') {
-        console.log('[WechatAPI] 演示模式，跳过session重置');
-        return true;
+      // 检查配置
+      if (!this.isConfigValid()) {
+        throw new Error('微信配置不完整');
       }
 
       // 获取access_token
@@ -344,18 +333,9 @@ class WechatApiService {
     try {
       console.log('[WechatAPI] 解密用户数据');
 
-      // 演示模式返回模拟数据
-      if (WECHAT_CONFIG.appid === 'demo_appid') {
-        return {
-          nickName: '演示用户',
-          gender: 0,
-          city: '',
-          province: '',
-          country: '',
-          avatarUrl: '',
-          openId: `demo_openid_${Date.now()}`,
-          unionId: null
-        };
+      // 检查配置
+      if (!this.isConfigValid()) {
+        throw new Error('微信配置不完整');
       }
 
       // Base64解码
@@ -402,10 +382,10 @@ class WechatApiService {
    * @returns {boolean} 配置是否有效
    */
   isConfigValid() {
-    return WECHAT_CONFIG.appid !== 'demo_appid' && 
-           WECHAT_CONFIG.secret !== 'demo_secret' &&
-           WECHAT_CONFIG.appid && 
-           WECHAT_CONFIG.secret;
+    return WECHAT_CONFIG.appid && 
+           WECHAT_CONFIG.secret &&
+           WECHAT_CONFIG.appid.length > 0 &&
+           WECHAT_CONFIG.secret.length > 0;
   }
 
   /**
@@ -415,9 +395,8 @@ class WechatApiService {
    */
   getConfigStatus() {
     return {
-      isDemo: WECHAT_CONFIG.appid === 'demo_appid',
-      hasAppId: !!WECHAT_CONFIG.appid && WECHAT_CONFIG.appid !== 'demo_appid',
-      hasSecret: !!WECHAT_CONFIG.secret && WECHAT_CONFIG.secret !== 'demo_secret',
+      hasAppId: !!WECHAT_CONFIG.appid,
+      hasSecret: !!WECHAT_CONFIG.secret,
       isValid: this.isConfigValid()
     };
   }
