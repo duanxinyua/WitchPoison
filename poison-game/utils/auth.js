@@ -102,26 +102,13 @@ export async function wxLogin(forceAuth = false) {
       await saveUserSession(authResult.data);
       console.log('[Auth] 微信登录成功:', {
         userId: authResult.data.user.id,
-        nickname: authResult.data.user.nickname,
-        isDemo: authResult.data.config?.isDemo
+        nickname: authResult.data.user.nickname
       });
-      
-      // 如果是演示模式，给用户提示
-      if (authResult.data.config?.isDemo) {
-        setTimeout(() => {
-          uni.showToast({
-            title: '当前为演示模式',
-            icon: 'none',
-            duration: 2000
-          });
-        }, 500);
-      }
       
       return {
         success: true,
         user: authResult.data.user,
-        token: authResult.data.token,
-        config: authResult.data.config
+        token: authResult.data.token
       };
     } else {
       throw new Error(authResult.message || '后端认证失败');

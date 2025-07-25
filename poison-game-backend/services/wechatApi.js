@@ -382,10 +382,22 @@ class WechatApiService {
    * @returns {boolean} 配置是否有效
    */
   isConfigValid() {
-    return WECHAT_CONFIG.appid && 
-           WECHAT_CONFIG.secret &&
-           WECHAT_CONFIG.appid.length > 0 &&
-           WECHAT_CONFIG.secret.length > 0;
+    const hasAppId = WECHAT_CONFIG.appid && typeof WECHAT_CONFIG.appid === 'string' && WECHAT_CONFIG.appid.length > 0;
+    const hasSecret = WECHAT_CONFIG.secret && typeof WECHAT_CONFIG.secret === 'string' && WECHAT_CONFIG.secret.length > 0;
+    
+    console.log('[WechatAPI] 配置验证结果:', {
+      appidExists: !!WECHAT_CONFIG.appid,
+      appidType: typeof WECHAT_CONFIG.appid,
+      appidLength: WECHAT_CONFIG.appid ? WECHAT_CONFIG.appid.length : 0,
+      secretExists: !!WECHAT_CONFIG.secret,
+      secretType: typeof WECHAT_CONFIG.secret,
+      secretLength: WECHAT_CONFIG.secret ? WECHAT_CONFIG.secret.length : 0,
+      hasAppId,
+      hasSecret,
+      isValid: hasAppId && hasSecret
+    });
+    
+    return hasAppId && hasSecret;
   }
 
   /**
