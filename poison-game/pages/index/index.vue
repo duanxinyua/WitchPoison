@@ -262,6 +262,36 @@ export default {
     generateGuestNickname() {
       return generateRandomNickname();
     },
+    
+    /**
+     * 生成唯一的客户端ID
+     * 2025-07-25: 修复clientId重复问题，确保每次生成的ID都是唯一的
+     * @returns {string} 唯一的客户端ID
+     */
+    generateUniqueClientId() {
+      // 使用时间戳 + 随机字符串 + 设备信息生成唯一ID
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substr(2, 12);
+      const deviceInfo = wx.getSystemInfoSync?.() || {};
+      const rawDeviceId = deviceInfo.brand || deviceInfo.model || 'unknown';
+      
+      // 2025-07-25: 确保设备ID只包含URL安全字符 - 移除所有特殊字符
+      const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
+      
+      // 组合生成唯一ID，确保格式统一
+      const clientId = `client_${timestamp}_${randomStr}_${deviceId}`;
+      
+      console.log('生成唯一clientId:', {
+        timestamp,
+        randomStr,
+        rawDeviceId,
+        cleanDeviceId: deviceId,
+        finalId: clientId,
+        length: clientId.length
+      });
+      
+      return clientId;
+    },
     openNicknameModal() {
       this.$set(this, 'tempNickname', this.nickname);
       this.$set(this, 'showNicknameModal', true);
@@ -379,9 +409,32 @@ export default {
     async initWebSocket() {
       // 移除昵称检查，支持游客模式
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
-      this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      uni.setStorageSync('clientId', this.clientId);
-      console.log('初始化 clientId:', this.clientId);
+      
+      // 2025-07-25: 优化clientId生成 - 检查是否已有有效的clientId
+      const existingClientId = uni.getStorageSync('clientId');
+      const now = Date.now();
+      const isValidClientId = existingClientId && 
+                             existingClientId.length > 0 && 
+                             existingClientId.startsWith('client_') &&
+                             existingClientId.split('_').length >= 4;
+                             
+      // 检查clientId是否过期（超过24小时强制更新）
+      const clientIdExpired = existingClientId && existingClientId.includes('_') && 
+                              (now - parseInt(existingClientId.split('_')[1]) > 24 * 60 * 60 * 1000);
+      
+      if (isValidClientId && !clientIdExpired) {
+        this.clientId = existingClientId;
+        console.log('使用已存在的有效 clientId:', this.clientId);
+      } else {
+        if (clientIdExpired) {
+          console.log('clientId已过期，生成新的:', existingClientId);
+        } else if (!isValidClientId) {
+          console.log('无效的clientId格式，生成新的:', existingClientId);
+        }
+        this.clientId = this.generateUniqueClientId();
+        uni.setStorageSync('clientId', this.clientId);
+        console.log('生成新的 clientId:', this.clientId);
+      }
       try {
         await connect(this.clientId);
         console.log('WebSocket 连接成功，准备注册消息回调');
@@ -434,7 +487,8 @@ export default {
       if (!isConnected()) {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // 2025-07-25: 使用统一的clientId生成方法
+          this.clientId = this.generateUniqueClientId();
           uni.setStorageSync('clientId', this.clientId);
           console.log('生成新 clientId:', this.clientId);
           await connect(this.clientId);
@@ -531,7 +585,8 @@ export default {
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // 2025-07-25: 使用统一的clientId生成方法
+          this.clientId = this.generateUniqueClientId();
           uni.setStorageSync('clientId', this.clientId);
           console.log('生成新 clientId:', this.clientId);
           await connect(this.clientId);
