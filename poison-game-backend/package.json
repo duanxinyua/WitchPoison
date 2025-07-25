@@ -8,7 +8,8 @@
     "mysql2": "^3.6.5",
     "axios": "^1.6.2",
     "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.0.3"
   },
   "scripts": {
     "start": "node index.js"

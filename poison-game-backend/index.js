@@ -6,6 +6,9 @@
  * 技术栈: Node.js + Express + WebSocket
  */
 
+// 2025-07-25: 加载环境变量配置
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -903,6 +906,17 @@ async function startServer() {
       debugLog('服务器运行在 http://localhost:3000');
       debugLog('WebSocket服务器已启动');
       debugLog('数据库持久化已启用');
+      
+      // 2025-07-25: 验证环境变量加载状态
+      debugLog('环境变量加载状态:', {
+        NODE_ENV: process.env.NODE_ENV,
+        hasWechatAppId: !!process.env.WECHAT_APPID,
+        wechatAppIdLength: process.env.WECHAT_APPID ? process.env.WECHAT_APPID.length : 0,
+        hasWechatSecret: !!process.env.WECHAT_SECRET,
+        wechatSecretLength: process.env.WECHAT_SECRET ? process.env.WECHAT_SECRET.length : 0,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        totalEnvVars: Object.keys(process.env).length
+      });
     });
   } catch (error) {
     debugError('服务器启动失败:', error);

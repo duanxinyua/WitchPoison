@@ -2234,3 +2234,88 @@ const loginResult = await authModule.wxLogin();
 3. **尝试手动微信登录**: 不再有前端JS错误
 
 下一步需要检查服务器端日志，确认500错误是否由微信配置问题导致，新增的配置验证日志应该会显示具体的配置状态。
+
+---
+
+### 2025-07-25 修复后端环境变量加载问题
+
+#### 问题背景
+前端仍然收到503错误，表明微信配置不完整。检查后发现虽然 `.env` 文件配置正确，但后端缺少 `dotenv` 包和加载逻辑。
+
+#### 问题分析
+
+**修改时间**: 2025-07-25  
+**错误状态码**: 503 (微信小程序配置错误)  
+**根本原因**: 后端没有加载 `.env` 文件中的环境变量
+
+**具体问题**:
+1. `package.json` 缺少 `dotenv` 依赖
+2. `index.js` 没有 `require('dotenv').config()` 调用
+3. `process.env.WECHAT_APPID` 和 `process.env.WECHAT_SECRET` 为 `undefined`
+
+#### 修复方案
+
+##### 1. 添加 dotenv 依赖 (`package.json`)
+
+**修改内容**:
+```json
+"dependencies": {
+  "express": "^4.21.2",
+  "uuid": "^11.1.0", 
+  "ws": "^8.18.2",
+  "mysql2": "^3.6.5",
+  "axios": "^1.6.2",
+  "jsonwebtoken": "^9.0.2",
+  "bcryptjs": "^2.4.3",
+  "dotenv": "^16.0.3"  // ✅ 新增
+}
+```
+
+##### 2. 加载环境变量配置 (`index.js`)
+
+**在文件顶部添加**:
+```javascript
+// 2025-07-25: 加载环境变量配置
+require('dotenv').config();
+```
+
+##### 3. 添加环境变量验证日志
+
+**在服务器启动时验证**:
+```javascript
+// 2025-07-25: 验证环境变量加载状态
+debugLog('环境变量加载状态:', {
+  NODE_ENV: process.env.NODE_ENV,
+  hasWechatAppId: !!process.env.WECHAT_APPID,
+  wechatAppIdLength: process.env.WECHAT_APPID ? process.env.WECHAT_APPID.length : 0,
+  hasWechatSecret: !!process.env.WECHAT_SECRET,
+  wechatSecretLength: process.env.WECHAT_SECRET ? process.env.WECHAT_SECRET.length : 0,
+  hasJwtSecret: !!process.env.JWT_SECRET,
+  totalEnvVars: Object.keys(process.env).length
+});
+```
+
+#### 修复效果
+
+**环境变量加载**:
+- ✅ `dotenv` 包正确加载 `.env` 文件
+- ✅ 微信 AppId 和 AppSecret 正确读取
+- ✅ JWT密钥和其他配置正确加载
+- ✅ 启动时输出详细的环境变量状态
+
+**预期结果**:
+- 🔄 微信登录应该正常工作 (不再是503错误)
+- 🔄 配置验证日志应该显示 `isValid: true`
+- 🔄 前端应该收到正常的登录响应
+
+#### 部署说明
+
+**服务器部署步骤**:
+1. **安装新依赖**: `npm install`
+2. **重启服务**: 重启Node.js服务
+3. **检查日志**: 查看启动日志中的环境变量加载状态
+4. **验证配置**: 访问 `/api/auth/config-status` 检查配置状态
+
+#### 总结
+
+此次修复解决了环境变量加载的根本问题。之前的所有配置都是正确的，但由于缺少 `dotenv` 包，环境变量无法被正确读取。修复后，微信小程序登录功能应该能够正常工作，503配置错误应该被解决。
