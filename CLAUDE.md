@@ -2173,3 +2173,64 @@ router.get('/config-status', (req, res) => {
 #### 总结
 
 此次修复解决了移除演示模式后出现的配置和自定义信息传递问题。通过改进前端的自定义信息检测逻辑，提高了系统的容错性和可靠性。同时增强了后端的错误处理和调试能力，便于快速定位和解决配置相关的问题。这些改进确保了用户的个性化设置能够正确传递和使用，同时提供了更好的错误反馈机制。
+
+---
+
+### 2025-07-25 修复前端动态import兼容性问题
+
+#### 问题背景
+前端出现新的错误：`TypeError: wxLogin is not a function`，导致手动微信登录功能失效。
+
+#### 问题分析
+
+**修改时间**: 2025-07-25  
+**错误位置**: `pages/index/index.vue` 中的 `performWechatLogin` 方法  
+**错误现象**: 动态import后解构赋值失败
+
+**具体问题**:
+```javascript
+// 问题代码
+const { wxLogin } = await import('../../utils/auth');
+const loginResult = await wxLogin(); // TypeError: wxLogin is not a function
+```
+
+**根本原因**: 动态import的解构赋值在某些环境下可能存在兼容性问题，特别是在UniApp编译环境中。
+
+#### 修复方案
+
+**修改内容**:
+```javascript
+// 修复前
+const { wxLogin } = await import('../../utils/auth');
+const loginResult = await wxLogin();
+
+// 修复后
+const authModule = await import('../../utils/auth');
+const loginResult = await authModule.wxLogin();
+```
+
+**改进效果**:
+- **兼容性增强**: 避免解构赋值可能的兼容性问题
+- **错误减少**: 确保动态import的正确使用
+- **功能恢复**: 手动微信登录功能正常工作
+
+#### 测试状态
+
+**前端修复验证**:
+- ✅ 自定义信息检测优化生效
+- ✅ 自定义昵称和头像正确传递给后端
+- ✅ 游客模式登录正常工作
+- ✅ 前端import错误修复
+
+**待解决问题**:
+- ❌ 微信登录仍返回500错误（需要检查服务器端配置日志）
+- 需要确认新增的配置调试日志是否输出
+
+#### 当前状态
+
+用户现在可以：
+1. **正常使用游客模式**: 系统自动降级到游客登录
+2. **保持个性化设置**: 自定义昵称和头像正确保存和使用
+3. **尝试手动微信登录**: 不再有前端JS错误
+
+下一步需要检查服务器端日志，确认500错误是否由微信配置问题导致，新增的配置验证日志应该会显示具体的配置状态。

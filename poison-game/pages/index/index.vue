@@ -849,8 +849,8 @@ export default {
       try {
         uni.showLoading({ title: '正在登录...' });
         
-        const { wxLogin } = await import('../../utils/auth');
-        const loginResult = await wxLogin();
+        const authModule = await import('../../utils/auth');
+        const loginResult = await authModule.wxLogin();
         
         if (loginResult && loginResult.success) {
           this.setUserData(loginResult);
