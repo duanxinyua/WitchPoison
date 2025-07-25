@@ -12,9 +12,9 @@
 
 const mysql = require('mysql2/promise');
 
-// 数据库配置 - 2025-07-25: 配置远程MySQL9.0数据库连接
+// 数据库配置 - 2025-07-25: 配置本地MySQL9.0数据库连接（安全考虑）
 const dbConfig = {
-  host: '49.233.136.85',
+  host: '127.0.0.1',
   port: 13306,
   user: 'root',
   password: '7HSEG6NB64Cy3ZpH',
