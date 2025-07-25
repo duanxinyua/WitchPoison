@@ -105,14 +105,11 @@ export async function connect(clientId) {
           reject(new Error('WebSocket 连接超时'));
         }, CONNECT_TIMEOUT);
 
-        socketTask.onOpen(() => {
+        socketTask.onOpen((event) => {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           
-          // 2025-07-25: 修复竞争条件 - 检查socketTask是否仍然有效
-          if (!socketTask) {
-            console.warn('onOpen回调触发时socketTask已被清理，跳过处理');
-            return;
-          }
+          // 2025-07-25: 简化逻辑 - onOpen就意味着连接成功，直接处理
+          // 移除过度的socketTask检查，避免误判
           
           clearTimeout(timeout);
           isConnecting = false;
@@ -122,8 +119,8 @@ export async function connect(clientId) {
           
           // 延迟启动心跳和状态确认
           setTimeout(() => {
-            // 再次检查socketTask有效性
-            if (socketTask && socketTask.readyState === 1) {
+            // 2025-07-25: 简化状态检查，只要socketTask存在就启动心跳
+            if (socketTask) {
               startHeartbeat(clientId);
               console.log('WebSocket 连接完全建立', {
                 clientId,
