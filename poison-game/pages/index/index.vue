@@ -269,19 +269,30 @@ export default {
       this.$set(this, 'showNicknameModal', false);
       this.$set(this, 'tempNickname', '');
     },
-    saveCustomization() {
+    async saveCustomization() {
       if (!this.tempNickname.trim()) {
         uni.showToast({ title: '请输入昵称', icon: 'error' });
         return;
       }
       
-      // 保存昵称和头像
+      // 保存昵称和头像到本地
       uni.setStorageSync('nickname', this.tempNickname.trim());
       uni.setStorageSync('userAvatar', this.userAvatar); // 确保头像也被保存
       uni.setStorageSync('manuallySetNickname', 'true'); // 标记为手动设置
       this.$set(this, 'nickname', this.tempNickname.trim());
       this.$set(this, 'nicknameSaved', true);
       this.$set(this, 'isFirstTime', false);
+      
+      // 如果用户已登录微信，同步个性化信息到数据库
+      if (this.isLoggedIn && !this.userInfo?.is_guest) {
+        try {
+          console.log('[Auth] 同步个性化信息到数据库');
+          await this.syncCustomizationToDatabase();
+        } catch (error) {
+          console.error('[Auth] 同步个性化信息失败:', error);
+          // 即使同步失败也不影响本地保存
+        }
+      }
       
       // 关闭模态框
       this.closeNicknameModal();
@@ -459,6 +470,7 @@ export default {
           boardSize: boardSize,
           playerCount: playerCount,
           name: this.nickname,
+          avatarEmoji: this.userAvatar, // 2025-07-25: 传递用户头像
           clientId: this.clientId,
         };
         console.log('准备发送创建房间请求:', createData);
@@ -533,6 +545,7 @@ export default {
           action: 'join',
           roomId: this.roomId,
           name: this.nickname,
+          avatarEmoji: this.userAvatar, // 2025-07-25: 传递用户头像
           clientId: this.clientId,
         };
         const sent = sendMessage(joinData);
@@ -684,6 +697,59 @@ export default {
       });
       console.log('注册新消息回调');
     },
+    
+    /**
+     * 同步个性化信息到数据库
+     * 2025-07-25: 将用户自定义的昵称和头像同步到数据库
+     */
+    async syncCustomizationToDatabase() {
+      if (!this.userToken || !this.userInfo) {
+        console.warn('[Auth] 无用户令牌或信息，跳过数据库同步');
+        return;
+      }
+      
+      try {
+        const response = await new Promise((resolve, reject) => {
+          wx.request({
+            url: `${require('../config/index.js').default.apiUrl}/api/auth/update-custom-info`,
+            method: 'POST',
+            data: {
+              nickname: this.nickname,
+              avatarEmoji: this.userAvatar
+            },
+            header: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.userToken}`
+            },
+            success: (res) => {
+              if (res.statusCode === 200) {
+                resolve(res.data);
+              } else {
+                reject(new Error(`同步失败: ${res.statusCode}`));
+              }
+            },
+            fail: (err) => {
+              reject(new Error('网络请求失败: ' + err.errMsg));
+            }
+          });
+        });
+        
+        if (response.success) {
+          console.log('[Auth] 个性化信息已同步到数据库');
+          // 更新本地用户信息
+          if (this.userInfo) {
+            this.userInfo.nickname = this.nickname;
+            this.userInfo.avatar_emoji = this.userAvatar;
+            uni.setStorageSync('userInfo', this.userInfo);
+          }
+        } else {
+          throw new Error(response.message || '同步失败');
+        }
+      } catch (error) {
+        console.error('[Auth] 同步个性化信息到数据库失败:', error);
+        throw error;
+      }
+    },
     /**
      * 执行自动登录
      * 2025-07-25: 检查本地会话，尝试自动登录或使用游客模式
@@ -740,6 +806,18 @@ export default {
           this.nickname = localNickname;
           this.userAvatar = localAvatar;
           console.log('[Auth] 保持本地自定义信息:', { nickname: this.nickname, avatar: this.userAvatar });
+          
+          // 如果本地信息与服务器不同，同步到服务器
+          if (this.nickname !== loginData.user.nickname || this.userAvatar !== loginData.user.avatar_emoji) {
+            console.log('[Auth] 本地自定义信息与服务器不同，准备同步');
+            setTimeout(async () => {
+              try {
+                await this.syncCustomizationToDatabase();
+              } catch (error) {
+                console.error('[Auth] 同步本地自定义信息到服务器失败:', error);
+              }
+            }, 1000); // 延迟1秒执行，确保登录流程完成
+          }
         } else {
           // 使用服务器返回的信息，并保存到本地
           this.nickname = loginData.user.nickname;
@@ -779,6 +857,19 @@ export default {
             title: '登录成功！',
             icon: 'success'
           });
+          
+          // 登录成功后，如果有本地自定义信息，同步到数据库
+          const hasLocalCustomization = uni.getStorageSync('manuallySetNickname') === 'true';
+          if (hasLocalCustomization) {
+            setTimeout(async () => {
+              try {
+                await this.syncCustomizationToDatabase();
+                console.log('[Auth] 微信登录后同步本地自定义信息成功');
+              } catch (error) {
+                console.error('[Auth] 微信登录后同步本地自定义信息失败:', error);
+              }
+            }, 2000); // 延迟2秒执行，确保登录流程完成
+          }
         } else {
           throw new Error('登录失败');
         }

@@ -362,6 +362,71 @@ router.post('/logout', async (req, res) => {
 });
 
 /**
+ * 更新用户个性化信息
+ * 2025-07-25: 更新用户的昵称和头像emoji
+ * POST /api/auth/update-custom-info
+ */
+router.post('/update-custom-info', async (req, res) => {
+  try {
+    const { nickname, avatarEmoji } = req.body;
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少认证令牌'
+      });
+    }
+
+    if (!nickname || !avatarEmoji) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少昵称或头像参数'
+      });
+    }
+
+    // 验证令牌
+    const user = await User.verifySessionToken(token);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: '认证令牌无效'
+      });
+    }
+
+    console.log('[Auth] 更新用户个性化信息:', { 
+      userId: user.id, 
+      nickname, 
+      avatarEmoji,
+      oldNickname: user.nickname,
+      oldAvatar: user.avatar_emoji
+    });
+
+    // 使用User模型的方法更新自定义信息
+    await User.updateCustomUserInfo(user.id, nickname, avatarEmoji);
+
+    console.log('[Auth] 用户个性化信息更新成功, 用户ID:', user.id);
+
+    res.json({
+      success: true,
+      message: '个性化信息更新成功',
+      data: {
+        nickname,
+        avatar_emoji: avatarEmoji
+      }
+    });
+
+  } catch (error) {
+    console.error('[Auth] 个性化信息更新失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '个性化信息更新失败'
+    });
+  }
+});
+
+/**
  * 更新用户头像
  * 2025-07-25: 更新用户的头像emoji
  * POST /api/auth/update-avatar

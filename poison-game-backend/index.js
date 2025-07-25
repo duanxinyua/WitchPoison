@@ -107,9 +107,10 @@ class Game {
    * 2025-07-25: 处理玩家加入逻辑，包括重连和状态检查
    * @param {string} id - 玩家唯一ID
    * @param {string} name - 玩家昵称
+   * @param {string} avatarEmoji - 玩家头像emoji（可选）
    * @returns {Object} - 操作结果 {success: boolean, message?: string}
    */
-  addPlayer(id, name) {
+  addPlayer(id, name, avatarEmoji = null) {
     debugLog('尝试加入房间:', { 
       roomId: this.roomId, 
       playerId: id, 
@@ -160,7 +161,9 @@ class Game {
         roomId: this.roomId
       });
       // 替换旧的玩家记录，确保重置所有状态
-      this.players[existingPlayerIndex] = { id, name, emoji: this.players[existingPlayerIndex].emoji, poisonPos: null, isOut: false, clientId: id };
+      // 2025-07-25: 使用用户新传递的头像或保持原有头像
+      const finalEmoji = avatarEmoji || this.players[existingPlayerIndex].emoji;
+      this.players[existingPlayerIndex] = { id, name, emoji: finalEmoji, poisonPos: null, isOut: false, clientId: id };
       debugLog('玩家重新加入（替换旧记录）后状态:', { 
         id, 
         name, 
@@ -228,13 +231,22 @@ class Game {
       });
     }
     
-    // 获取已使用的头像列表
-    const usedEmojis = this.players.map(p => p.emoji);
-    // 找到第一个未使用的头像
-    let emoji = this.emojis.find(e => !usedEmojis.includes(e));
-    // 如果所有头像都被使用了，回到循环分配
-    if (!emoji) {
-      emoji = this.emojis[this.players.length % this.emojis.length];
+    // 2025-07-25: 优先使用用户自定义头像，否则分配默认头像
+    let emoji;
+    if (avatarEmoji) {
+      // 使用用户传递的头像
+      emoji = avatarEmoji;
+      debugLog('使用用户自定义头像:', { playerId: id, customEmoji: emoji });
+    } else {
+      // 获取已使用的头像列表
+      const usedEmojis = this.players.map(p => p.emoji);
+      // 找到第一个未使用的头像
+      emoji = this.emojis.find(e => !usedEmojis.includes(e));
+      // 如果所有头像都被使用了，回到循环分配
+      if (!emoji) {
+        emoji = this.emojis[this.players.length % this.emojis.length];
+      }
+      debugLog('使用默认头像分配:', { playerId: id, defaultEmoji: emoji });
     }
     
     debugLog('为新玩家分配头像:', { 
@@ -579,7 +591,7 @@ wss.on('connection', (ws, req) => {
 
       debugLog('收到消息:', { clientId, data });
       const action = data.action || data.type;
-      const { roomId, x, y, boardSize, playerCount, name } = data;
+      const { roomId, x, y, boardSize, playerCount, name, avatarEmoji } = data;
       let game = games.get(roomId);
 
       if (!data.clientId || data.clientId !== clientId) {
@@ -613,7 +625,7 @@ wss.on('connection', (ws, req) => {
           debugWarn('短ID生成失败，使用UUID:', { roomId: newRoomId, attempts });
         }
         game = new Game(newRoomId, boardSize, playerCount);
-        const addResult = game.addPlayer(clientId, name);
+        const addResult = game.addPlayer(clientId, name, avatarEmoji);
         if (!addResult.success) {
           debugWarn('添加玩家失败:', { clientId, message: addResult.message });
           send(clientId, { type: 'error', message: addResult.message });
@@ -631,7 +643,7 @@ wss.on('connection', (ws, req) => {
           send(clientId, { type: 'error', message: '房间不存在' });
           return;
         }
-        const addResult = game.addPlayer(clientId, name);
+        const addResult = game.addPlayer(clientId, name, avatarEmoji);
         if (!addResult.success) {
           debugWarn('添加玩家失败:', { clientId, message: addResult.message });
           send(clientId, { type: 'error', message: addResult.message });
