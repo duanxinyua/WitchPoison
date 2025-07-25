@@ -233,14 +233,15 @@ class Game {
     }
     
     // 2025-07-25: 优先使用用户自定义头像，否则分配默认头像
+    // 获取已使用的头像列表
+    const usedEmojis = this.players.map(p => p.emoji);
     let emoji;
+    
     if (avatarEmoji) {
       // 使用用户传递的头像
       emoji = avatarEmoji;
       debugLog('使用用户自定义头像:', { playerId: id, customEmoji: emoji });
     } else {
-      // 获取已使用的头像列表
-      const usedEmojis = this.players.map(p => p.emoji);
       // 找到第一个未使用的头像
       emoji = this.emojis.find(e => !usedEmojis.includes(e));
       // 如果所有头像都被使用了，回到循环分配
@@ -645,8 +646,16 @@ wss.on('connection', (ws, req) => {
           broadcast(newRoomId, message);
           debugLog('广播 gameCreated:', { roomId: newRoomId, clientId, message });
         } catch (createError) {
-          debugError('创建房间失败:', createError);
-          send(clientId, { type: 'error', message: '服务器内部错误' });
+          debugError('创建房间失败:', {
+            error: createError.message,
+            stack: createError.stack,
+            clientId,
+            name,
+            avatarEmoji,
+            boardSize,
+            playerCount
+          });
+          send(clientId, { type: 'error', message: `服务器内部错误: ${createError.message}` });
         }
       } else if (action === 'join') {
         try {
@@ -664,8 +673,15 @@ wss.on('connection', (ws, req) => {
           debugLog('玩家加入:', { clientId, roomId, name, avatarEmoji });
           broadcast(roomId, { type: 'playerJoined', success: true, state: game.getState(), players: game.players });
         } catch (joinError) {
-          debugError('加入房间失败:', joinError);
-          send(clientId, { type: 'error', message: '服务器内部错误' });
+          debugError('加入房间失败:', {
+            error: joinError.message,
+            stack: joinError.stack,
+            clientId,
+            roomId,
+            name,
+            avatarEmoji
+          });
+          send(clientId, { type: 'error', message: `服务器内部错误: ${joinError.message}` });
         }
       } else if (action === 'setPoison') {
         if (!game) {
