@@ -414,18 +414,20 @@ export default {
       // 移除昵称检查，支持游客模式
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
       
-      // 2025-07-25: 检查现有WebSocket连接是否可用
-      if (isConnected() && this.clientId) {
+      // 2025-07-25: 检查现有WebSocket连接和clientId是否可用
+      const existingClientId = uni.getStorageSync('clientId');
+      if (isConnected() && existingClientId) {
         console.log('检测到有效的WebSocket连接，直接使用:', {
-          clientId: this.clientId,
-          readyState: socketTask?.readyState
+          clientId: existingClientId,
+          connectedState: isConnected()
         });
+        this.clientId = existingClientId; // 设置实例变量
         this.registerMessageHandler();
         return;
       }
       
       // 2025-07-25: 优化clientId生成 - 检查是否已有有效的clientId
-      const existingClientId = uni.getStorageSync('clientId');
+      // existingClientId 已经在上面获取过了，不用重复获取
       const now = Date.now();
       const isValidClientId = existingClientId && 
                              existingClientId.length > 0 && 

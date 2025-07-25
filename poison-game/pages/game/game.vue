@@ -492,7 +492,10 @@ export default {
         clearTimeout(this.flipTileTimeout);
         this.flipTileTimeout = null;
       }
-      closeWebSocket();
+      
+      // 2025-07-25: 不关闭WebSocket连接，保留给首页继续使用
+      // closeWebSocket(); // 注释掉，这是导致连接频繁关闭的根源
+      console.log('保留WebSocket连接，避免频繁重连问题');
       uni.reLaunch({
         url: '/pages/index/index',
         success: () => {
