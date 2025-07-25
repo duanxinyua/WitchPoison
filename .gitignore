@@ -1,3 +1,46 @@
-poison-game-backend/node_modules/
-poison-game-backend/package-lock.json
+# Node modules
+**/node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# UniApp build files
+**/unpackage/
+**/dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Cache files
+.cache/
+.temp/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Claude settings
+.claude/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# SSH password (if any)
+ssh_pass
+
+# Server files
 poison-game-backend/.htaccess

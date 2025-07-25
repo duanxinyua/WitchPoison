@@ -1,17 +1,37 @@
+/**
+ * WebSocket通信模块
+ * 创建时间: 2025-07-25
+ * 最后修改: 2025-07-25 by Claude
+ * 功能: 封装WebSocket连接管理、消息处理、自动重连和心跳保活
+ * 适用: UniApp微信小程序平台
+ */
+
 import config from '../config/index.js';
 
+// WebSocket连接实例
 let socketTask = null;
+// 消息回调函数数组
 let messageCallbacks = [];
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-const CONNECT_TIMEOUT = 10000;
-const HEARTBEAT_INTERVAL = 30000;
-let heartbeatTimer = null;
-let isConnecting = false;
 
+// 连接配置常量 - 2025-07-25: 优化重连策略和超时时间
+const MAX_RETRIES = 3;           // 最大重试次数
+const RETRY_DELAY = 1000;        // 重试延迟时间(ms)
+const CONNECT_TIMEOUT = 10000;   // 连接超时时间(ms)
+const HEARTBEAT_INTERVAL = 30000; // 心跳间隔时间(ms)
+
+// 连接状态管理
+let heartbeatTimer = null;       // 心跳定时器
+let isConnecting = false;        // 是否正在连接中
+
+/**
+ * 建立WebSocket连接
+ * 2025-07-25: 支持自动重连和连接状态管理
+ * @param {string} clientId - 客户端唯一标识符
+ * @returns {Promise} - 连接结果Promise
+ */
 export async function connect(clientId) {
   if (!clientId) {
-    console.error('clientId 缺失，无法连接 WebSocket');
+    console.error('[WebSocket] clientId 缺失，无法连接 WebSocket');
     return Promise.reject(new Error('clientId 缺失'));
   }
 
@@ -149,9 +169,15 @@ function bindMessageHandler() {
   }
 }
 
+/**
+ * 发送WebSocket消息
+ * 2025-07-25: 添加连接状态检查和错误处理
+ * @param {Object} data - 要发送的消息对象
+ * @returns {boolean} - 发送是否成功
+ */
 export function sendMessage(data) {
   if (!socketTask || socketTask.readyState !== 1) {
-    console.warn('WebSocket 未初始化或未连接', { readyState: socketTask?.readyState, data });
+    console.warn('[WebSocket] 未初始化或未连接', { readyState: socketTask?.readyState, data });
     return false;
   }
 

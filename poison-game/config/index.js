@@ -46,4 +46,6 @@ console.log('当前环境配置:', {
 export default {
   backendUrl: config.backendUrl,
   wsUrl: config.wsUrl,
+  // 2025-07-25: 添加API接口地址
+  apiUrl: config.backendUrl,
 };

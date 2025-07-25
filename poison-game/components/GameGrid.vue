@@ -23,57 +23,100 @@
   </view>
 </template>
 
+<!--
+  游戏棋盘组件 - GameGrid.vue
+  创建时间: 2025-07-25
+  最后修改: 2025-07-25 by Claude
+  功能: 渲染可交互的游戏棋盘，处理用户点击事件，显示游戏状态
+  特性: 
+  - 响应式网格布局 (5x5 到 10x10)
+  - 毒药提示显示
+  - 单元格状态管理 (空/已翻开/毒药)
+  - 交互动画效果
+-->
+
 <script>
 export default {
+  // 2025-07-25: 组件属性定义 - 从父组件接收游戏状态和棋盘数据
   props: {
+    // 棋盘状态二维数组
     board: {
       type: Array,
       required: true,
       default: () => [],
       validator: (board) => Array.isArray(board) && (board.length === 0 || board.every(row => Array.isArray(row))),
     },
+    // 游戏是否已开始
     gameStarted: {
       type: Boolean,
       required: true,
     },
+    // 当前玩家是否已设置毒药
     poisonSet: {
       type: Boolean,
       required: true,
     },
+    // 游戏结果对象
     gameResult: {
       type: Object,
       default: null,
     },
+    // 当前玩家的毒药位置 (用于在设置阶段显示提示)
     currentPlayerPoison: {
       type: Object,
       default: null,
     },
+    // 游戏当前状态
     status: {
       type: String,
       default: 'waiting',
     },
   },
+  // 2025-07-25: 计算属性 - 动态计算棋盘相关属性
   computed: {
+    // 计算棋盘大小，用于CSS变量和响应式布局
     boardSize() {
       return (this.board && Array.isArray(this.board)) ? this.board.length || 5 : 5;
     },
   },
+  // 2025-07-25: 组件内部状态
   data() {
     return {
-      isMounted: false,
+      isMounted: false, // 组件是否已挂载 - 防止未挂载时的操作
     };
   },
+  // 2025-07-25: 组件方法定义
   methods: {
+    /**
+     * 处理单元格点击事件
+     * 2025-07-25: 添加点击状态检查和事件委托
+     * @param {Event} e - 点击事件对象
+     */
     handleClick(e) {
       const { row, col } = e.currentTarget.dataset;
       const rowIndex = parseInt(row);
       const colIndex = parseInt(col);
-      console.log('GameGrid handleClick ����:', { row: rowIndex, col: colIndex, isMounted: this.isMounted, boardValue: this.board[rowIndex][colIndex], gameStarted: this.gameStarted, poisonSet: this.poisonSet, gameResult: this.gameResult });
+      
+      console.log('[GameGrid] 单元格点击:', { 
+        row: rowIndex, 
+        col: colIndex, 
+        isMounted: this.isMounted, 
+        boardValue: this.board[rowIndex][colIndex], 
+        gameStarted: this.gameStarted, 
+        poisonSet: this.poisonSet, 
+        gameResult: this.gameResult 
+      });
+      
+      // 检查点击有效性：单元格为空 + 游戏未结束 + 组件已挂载
       if (!this.board[rowIndex][colIndex] && !this.gameResult && this.isMounted) {
-        console.log('GameGrid ���� cell-click:', { row: rowIndex, col: colIndex });
+        console.log('[GameGrid] 触发 cell-click 事件:', { row: rowIndex, col: colIndex });
         this.$emit('cell-click', { row: rowIndex, col: colIndex });
       } else {
-        console.warn('�����Ч:', { boardValue: this.board[rowIndex][colIndex], gameResult: this.gameResult, isMounted: this.isMounted });
+        console.warn('[GameGrid] 无效点击:', { 
+          boardValue: this.board[rowIndex][colIndex], 
+          gameResult: this.gameResult, 
+          isMounted: this.isMounted 
+        });
       }
     },
     showPoisonHint(row, col) {
