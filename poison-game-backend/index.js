@@ -11,6 +11,10 @@ const http = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
+// 2025-07-25: 引入数据库和认证模块
+const { initDatabase, closeDatabase } = require('./config/database');
+const authRoutes = require('./routes/auth');
+
 // 调试开关 - 控制日志输出详细程度
 // 2025-07-25: 保持开启状态用于开发调试
 const DEBUG = true;
@@ -41,6 +45,26 @@ function debugError(...args) {
 
 // Express应用实例
 const app = express();
+
+// 2025-07-25: 配置Express中间件
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 2025-07-25: 配置CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// 2025-07-25: 注册认证路由
+app.use('/api/auth', authRoutes);
+
 // HTTP服务器实例
 const server = http.createServer(app);
 // WebSocket服务器实例
@@ -816,6 +840,44 @@ function handleClientDisconnect(clientId) {
 
 app.get('/health', (req, res) => res.send('OK'));
 
-server.listen(3000, () => {
-  debugLog('服务器运行在 http://localhost:3000');
+// 2025-07-25: 服务器启动时初始化数据库
+async function startServer() {
+  try {
+    // 初始化数据库连接
+    debugLog('正在初始化数据库连接...');
+    const dbInitialized = await initDatabase();
+    
+    if (!dbInitialized) {
+      debugError('数据库初始化失败，服务器启动中止');
+      process.exit(1);
+    }
+    
+    debugLog('数据库连接初始化成功');
+    
+    // 启动HTTP服务器
+    server.listen(3000, () => {
+      debugLog('服务器运行在 http://localhost:3000');
+      debugLog('WebSocket服务器已启动');
+      debugLog('数据库持久化已启用');
+    });
+  } catch (error) {
+    debugError('服务器启动失败:', error);
+    process.exit(1);
+  }
+}
+
+// 优雅关闭处理
+process.on('SIGINT', async () => {
+  debugLog('收到SIGINT信号，开始优雅关闭...');
+  await closeDatabase();
+  process.exit(0);
 });
+
+process.on('SIGTERM', async () => {
+  debugLog('收到SIGTERM信号，开始优雅关闭...');
+  await closeDatabase();
+  process.exit(0);
+});
+
+// 启动服务器
+startServer();
