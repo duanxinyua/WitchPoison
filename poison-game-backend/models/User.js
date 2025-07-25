@@ -16,7 +16,7 @@ const crypto = require('crypto');
 const wechatApi = require('../services/wechatApi');
 
 // JWT密钥 - 2025-07-25: 用于生成用户会话令牌
-const JWT_SECRET = 'witch_poison_game_jwt_secret_2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_please_change_in_production';
 
 class User {
   /**

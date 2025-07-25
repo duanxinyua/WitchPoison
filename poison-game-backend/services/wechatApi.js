@@ -14,8 +14,8 @@ const crypto = require('crypto');
 
 // 微信小程序配置
 const WECHAT_CONFIG = {
-  appid: process.env.WECHAT_APPID || 'wx85c2b499b79831e1',
-  secret: process.env.WECHAT_SECRET || 'a29c9704ddea97060adead276aafd423'
+  appid: process.env.WECHAT_APPID || 'demo_appid',
+  secret: process.env.WECHAT_SECRET || 'demo_secret'
 };
 
 // 微信API端点
