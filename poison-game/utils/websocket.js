@@ -96,22 +96,31 @@ export async function connect(clientId) {
 
         socketTask.onOpen(() => {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
+          
+          // 2025-07-25: 修复竞争条件 - 检查socketTask是否仍然有效
+          if (!socketTask) {
+            console.warn('onOpen回调触发时socketTask已被清理，跳过处理');
+            return;
+          }
+          
           clearTimeout(timeout);
           isConnecting = false;
           
-          // 2025-07-25: 修复时序问题 - 确保状态同步后再绑定处理器
-          // 立即绑定消息处理器，不依赖readyState
+          // 立即绑定消息处理器
           bindMessageHandler();
           
           // 延迟启动心跳，确保连接完全建立
           setTimeout(() => {
-            startHeartbeat(clientId);
-            console.log('WebSocket 连接完全建立', {
-              clientId,
-              readyState: socketTask?.readyState,
-              messageHandlerBound: socketTask?.onMessageBound,
-              callbackCount: messageCallbacks.length
-            });
+            // 再次检查socketTask有效性
+            if (socketTask) {
+              startHeartbeat(clientId);
+              console.log('WebSocket 连接完全建立', {
+                clientId,
+                readyState: socketTask?.readyState,
+                messageHandlerBound: socketTask?.onMessageBound,
+                callbackCount: messageCallbacks.length
+              });
+            }
           }, 100);
           
           resolve();
@@ -151,16 +160,25 @@ export async function connect(clientId) {
 
 /**
  * 绑定WebSocket消息处理器
- * 2025-07-25: 优化绑定逻辑，移除状态检查依赖
+ * 2025-07-25: 优化绑定逻辑，添加有效性检查
  */
 function bindMessageHandler() {
-  // 移除readyState检查，只要socketTask存在且未绑定就进行绑定
-  if (socketTask && !socketTask.onMessageBound) {
-    console.log('开始绑定WebSocket消息处理器', {
-      hasSocketTask: !!socketTask,
-      readyState: socketTask.readyState,
-      alreadyBound: socketTask.onMessageBound
-    });
+  // 检查socketTask是否存在且有效，避免竞争条件
+  if (!socketTask) {
+    console.log('跳过消息处理器绑定 - socketTask不存在');
+    return;
+  }
+  
+  if (socketTask.onMessageBound) {
+    console.log('跳过消息处理器绑定 - 已经绑定过');
+    return;
+  }
+  
+  console.log('开始绑定WebSocket消息处理器', {
+    hasSocketTask: !!socketTask,
+    readyState: socketTask.readyState,
+    alreadyBound: socketTask.onMessageBound
+  });
     socketTask.onMessage((res) => {
       try {
         const data = JSON.parse(res.data);
@@ -193,13 +211,6 @@ function bindMessageHandler() {
       callbackCount: messageCallbacks.length,
       readyState: socketTask.readyState
     });
-  } else {
-    console.log('跳过消息处理器绑定', {
-      hasSocketTask: !!socketTask,
-      alreadyBound: socketTask?.onMessageBound,
-      readyState: socketTask?.readyState
-    });
-  }
 }
 
 /**
