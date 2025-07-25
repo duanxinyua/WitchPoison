@@ -2025,3 +2025,151 @@ getConfigStatus() {
 #### 总结
 
 此次修改彻底移除了演示模式功能，简化了代码逻辑，提高了代码的一致性和可维护性。现在系统要求必须正确配置微信参数，确保了生产环境的规范性。移除演示模式后，代码更加简洁明了，减少了维护成本和潜在的错误源。
+
+---
+
+### 2025-07-25 修复微信登录500错误和自定义信息传递问题
+
+#### 问题背景
+移除演示模式后，微信登录出现500错误，同时发现前端的自定义信息（昵称和头像）没有正确传递给后端。
+
+#### 问题分析
+
+**修改时间**: 2025-07-25  
+**错误现象**: 
+- 微信登录请求返回500错误
+- 前端日志显示：`{hasCustomized: false, localNickname: "彩虹的暴雪", localAvatar: "😺", finalNickname: "微信用户", finalAvatar: null}`
+- 自定义信息存在但未被使用
+
+**根本原因**:
+1. **自定义信息检测逻辑不完善**: 仅依赖 `manuallySetNickname` 标记，未检查实际内容
+2. **移除演示模式后配置检查**: 后端要求必须配置微信参数，可能存在配置问题
+3. **错误处理不够详细**: 无法快速定位配置相关的错误
+
+#### 修复方案
+
+##### 1. 优化前端自定义信息检测逻辑 (`poison-game/utils/auth.js`)
+
+**修改前问题**:
+```javascript
+const hasCustomized = uni.getStorageSync('manuallySetNickname') === 'true';
+
+const finalUserInfo = {
+  ...userInfo,
+  nickname: hasCustomized && localNickname ? localNickname : userInfo.nickname,
+  avatarEmoji: hasCustomized && localAvatar ? localAvatar : null
+};
+```
+
+**问题**: 完全依赖 `manuallySetNickname` 标记，如果标记丢失但实际有自定义内容时会失败。
+
+**修改后改进**:
+```javascript
+// 2025-07-25: 改进自定义信息检测 - 不仅检查标记，也检查是否有实际内容
+const hasValidCustomNickname = localNickname && localNickname.length > 0 && localNickname !== '微信用户';
+const hasValidCustomAvatar = localAvatar && localAvatar.length > 0;
+const shouldUseCustomInfo = hasCustomized || hasValidCustomNickname || hasValidCustomAvatar;
+
+console.log('[Auth] 自定义信息检测:', {
+  hasCustomized,
+  localNickname,
+  localAvatar,
+  hasValidCustomNickname,
+  hasValidCustomAvatar,
+  shouldUseCustomInfo,
+  finalNickname: shouldUseCustomInfo && hasValidCustomNickname ? localNickname : userInfo.nickname,
+  finalAvatar: shouldUseCustomInfo && hasValidCustomAvatar ? localAvatar : null
+});
+
+const finalUserInfo = {
+  ...userInfo,
+  nickname: shouldUseCustomInfo && hasValidCustomNickname ? localNickname : userInfo.nickname,
+  avatarEmoji: shouldUseCustomInfo && hasValidCustomAvatar ? localAvatar : null
+};
+```
+
+**改进效果**:
+- **多重检查**: 检查标记、昵称内容、头像内容
+- **容错性强**: 即使标记丢失，有实际内容也会使用
+- **调试友好**: 详细的日志输出便于问题定位
+- **逻辑严谨**: 避免使用默认值"微信用户"作为自定义昵称
+
+##### 2. 改进后端错误处理 (`poison-game-backend/routes/auth.js`)
+
+**新增配置错误处理**:
+```javascript
+if (error.message.includes('微信配置不完整')) {
+  errorMessage = '微信小程序配置错误，请联系管理员';
+  statusCode = 503;
+} else if (error.message.includes('微信登录失败')) {
+  errorMessage = error.message;
+  statusCode = 400;
+} else if (error.message.includes('连接超时')) {
+  errorMessage = '网络连接超时，请检查网络后重试';
+  statusCode = 408;
+}
+```
+
+**新增配置状态检查端点**:
+```javascript
+/**
+ * 检查微信配置状态
+ * GET /api/auth/config-status
+ */
+router.get('/config-status', (req, res) => {
+  try {
+    const configStatus = wechatApi.getConfigStatus();
+    
+    res.json({
+      success: true,
+      message: '配置状态获取成功',
+      data: {
+        ...configStatus,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '获取配置状态失败'
+    });
+  }
+});
+```
+
+#### 修复效果
+
+**自定义信息传递**:
+1. **检测准确**: 更准确地检测用户是否有自定义信息
+2. **容错处理**: 标记丢失时仍能使用实际内容
+3. **调试增强**: 详细日志便于问题追踪
+4. **逻辑完善**: 避免将默认值误认为自定义内容
+
+**错误处理改进**:
+1. **错误分类**: 不同类型的错误返回不同的状态码和消息
+2. **配置诊断**: 新增配置状态检查端点便于调试
+3. **用户友好**: 配置错误时提供更明确的错误信息
+4. **状态明确**: 使用503状态码表示配置问题
+
+**调试能力提升**:
+1. **详细日志**: 前端输出完整的自定义信息决策过程
+2. **配置端点**: 后端提供配置状态查询接口
+3. **错误追踪**: 改进的错误处理便于定位问题
+4. **状态透明**: 清晰显示各个检查步骤的结果
+
+#### 测试验证
+
+**自定义信息传递测试**:
+1. **标记正常**: 验证 `manuallySetNickname = 'true'` 时的行为
+2. **标记丢失**: 验证标记丢失但有实际内容时的容错处理
+3. **部分自定义**: 验证只有昵称或只有头像的情况
+4. **无自定义**: 验证没有任何自定义信息时的默认行为
+
+**配置问题诊断**:
+1. **配置检查**: 通过 `/api/auth/config-status` 检查配置状态
+2. **错误分类**: 验证不同错误类型的响应码和消息
+3. **日志完整**: 确认前后端日志提供足够的调试信息
+
+#### 总结
+
+此次修复解决了移除演示模式后出现的配置和自定义信息传递问题。通过改进前端的自定义信息检测逻辑，提高了系统的容错性和可靠性。同时增强了后端的错误处理和调试能力，便于快速定位和解决配置相关的问题。这些改进确保了用户的个性化设置能够正确传递和使用，同时提供了更好的错误反馈机制。

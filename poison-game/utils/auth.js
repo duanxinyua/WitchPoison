@@ -60,11 +60,27 @@ export async function wxLogin(forceAuth = false) {
     const localAvatar = uni.getStorageSync('userAvatar');
     const hasCustomized = uni.getStorageSync('manuallySetNickname') === 'true';
     
+    // 2025-07-25: 改进自定义信息检测 - 不仅检查标记，也检查是否有实际内容
+    const hasValidCustomNickname = localNickname && localNickname.length > 0 && localNickname !== '微信用户';
+    const hasValidCustomAvatar = localAvatar && localAvatar.length > 0;
+    const shouldUseCustomInfo = hasCustomized || hasValidCustomNickname || hasValidCustomAvatar;
+    
+    console.log('[Auth] 自定义信息检测:', {
+      hasCustomized,
+      localNickname,
+      localAvatar,
+      hasValidCustomNickname,
+      hasValidCustomAvatar,
+      shouldUseCustomInfo,
+      finalNickname: shouldUseCustomInfo && hasValidCustomNickname ? localNickname : userInfo.nickname,
+      finalAvatar: shouldUseCustomInfo && hasValidCustomAvatar ? localAvatar : null
+    });
+    
     // 合并用户信息，优先使用本地自定义信息
     const finalUserInfo = {
       ...userInfo,
-      nickname: hasCustomized && localNickname ? localNickname : userInfo.nickname,
-      avatarEmoji: hasCustomized && localAvatar ? localAvatar : null
+      nickname: shouldUseCustomInfo && hasValidCustomNickname ? localNickname : userInfo.nickname,
+      avatarEmoji: shouldUseCustomInfo && hasValidCustomAvatar ? localAvatar : null
     };
     
     console.log('[Auth] 准备发送用户信息到后端:', {

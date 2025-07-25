@@ -73,7 +73,10 @@ router.post('/wechat-login', async (req, res) => {
     let errorMessage = '登录失败，请重试';
     let statusCode = 500;
     
-    if (error.message.includes('微信登录失败')) {
+    if (error.message.includes('微信配置不完整')) {
+      errorMessage = '微信小程序配置错误，请联系管理员';
+      statusCode = 503;
+    } else if (error.message.includes('微信登录失败')) {
       errorMessage = error.message;
       statusCode = 400;
     } else if (error.message.includes('连接超时')) {
@@ -311,6 +314,33 @@ router.post('/check-status', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '检查登录状态失败'
+    });
+  }
+});
+
+/**
+ * 检查微信配置状态
+ * 2025-07-25: 调试用端点，检查微信配置是否正确
+ * GET /api/auth/config-status
+ */
+router.get('/config-status', (req, res) => {
+  try {
+    const configStatus = wechatApi.getConfigStatus();
+    
+    res.json({
+      success: true,
+      message: '配置状态获取成功',
+      data: {
+        ...configStatus,
+        // 不返回具体的配置值，只返回是否配置
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] 获取配置状态失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取配置状态失败'
     });
   }
 });
