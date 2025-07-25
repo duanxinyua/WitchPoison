@@ -2633,3 +2633,41 @@ FLUSH PRIVILEGES;
 - 容器内应用连接宿主机MySQL时，MySQL看到的来源IP是容器网络IP
 - `localhost` 在容器环境中指向容器内部，不是宿主机
 - 需要配置MySQL用户允许从容器网络连接
+
+#### 确认问题持续存在
+
+第三次启动仍然失败，确认问题：
+```
+ER_ACCESS_DENIED_ERROR: Access denied for user 'root'@'172.18.0.1' (using password: YES)
+```
+
+**必须执行的解决方案**：
+
+**步骤1: 登录服务器MySQL**
+```bash
+# 在服务器上执行
+mysql -u root -p -P 13306
+```
+
+**步骤2: 执行权限配置**
+```sql
+-- 为Docker容器IP配置root权限
+GRANT ALL PRIVILEGES ON witch_poison_game.* TO 'root'@'172.18.0.1' IDENTIFIED BY 'root';
+
+-- 创建数据库（如果不存在）
+CREATE DATABASE IF NOT EXISTS witch_poison_game CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 刷新权限
+FLUSH PRIVILEGES;
+
+-- 验证权限
+SHOW GRANTS FOR 'root'@'172.18.0.1';
+```
+
+**步骤3: 验证连接**
+```bash
+# 从容器内测试连接
+mysql -h 127.0.0.1 -P 13306 -u root -p witch_poison_game
+```
+
+**重要**: 不解决这个MySQL权限问题，Node.js服务器无法启动。现在服务器启动失败时会显示需要执行的具体SQL命令。

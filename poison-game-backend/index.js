@@ -896,6 +896,9 @@ async function startServer() {
     
     if (!dbInitialized) {
       debugError('数据库初始化失败，服务器启动中止');
+      debugError('需要在MySQL中执行权限配置：');
+      debugError('GRANT ALL PRIVILEGES ON witch_poison_game.* TO \'root\'@\'172.18.0.1\' IDENTIFIED BY \'root\';');
+      debugError('FLUSH PRIVILEGES;');
       process.exit(1);
     }
     
