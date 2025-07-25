@@ -574,7 +574,10 @@ export default {
       clearTimeout(this.flipTileTimeout);
       this.flipTileTimeout = null;
     }
-    closeWebSocket();
+    
+    // 2025-07-25: 游戏页面不关闭WebSocket连接，保留给首页继续使用
+    // closeWebSocket(); // 注释掉，避免关闭连接
+    console.log('游戏页面卸载完成，保留WebSocket连接给首页使用');
   },
   onBackPress() {
     // 拦截返回按钮，直接返回首页

@@ -35,13 +35,42 @@ export async function connect(clientId) {
     return Promise.reject(new Error('clientId 缺失'));
   }
 
-  // 强制关闭旧连接
+  // 2025-07-25: 优化连接管理 - 检查现有连接是否可复用
+  if (socketTask && socketTask.readyState === 1) {
+    console.log('检测到有效WebSocket连接，复用现有连接', { 
+      clientId, 
+      readyState: socketTask.readyState,
+      existingClientId: socketTask.clientId 
+    });
+    // 如果clientId相同，直接复用连接
+    if (socketTask.clientId === clientId) {
+      return Promise.resolve();
+    }
+  }
+
+  // 强制关闭旧连接，避免连接泄漏
   if (socketTask) {
-    console.log('检测到现有 WebSocket 连接，关闭旧连接', { clientId, readyState: socketTask.readyState });
-    closeWebSocket();
-    // 2025-07-25: 确保连接状态完全重置
+    console.log('关闭现有WebSocket连接，避免连接泄漏', { 
+      clientId, 
+      oldReadyState: socketTask.readyState,
+      oldClientId: socketTask.clientId 
+    });
+    
+    try {
+      // 同步关闭，确保立即释放连接
+      if (socketTask.readyState !== 3) { // 如果不是已关闭状态
+        socketTask.close({ code: 1000, reason: 'switching connection' });
+      }
+    } catch (e) {
+      console.warn('关闭旧连接时出错:', e);
+    }
+    
+    socketTask = null;
+    stopHeartbeat();
     isConnecting = false;
-    await new Promise(resolve => setTimeout(resolve, 500)); // 等待关闭完成
+    
+    // 2025-07-25: 减少等待时间，但确保连接完全关闭
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   if (isConnecting) {
@@ -79,9 +108,15 @@ export async function connect(clientId) {
           fail: (err) => {
             console.error('wx.connectSocket 初始化失败:', err, { clientId });
             isConnecting = false;
+            socketTask = null; // 2025-07-25: 失败时清理socketTask
             reject(err);
           },
         });
+        
+        // 2025-07-25: 保存clientId到socketTask，便于连接复用判断
+        if (socketTask) {
+          socketTask.clientId = clientId;
+        }
 
         if (!socketTask) {
           console.error('wx.connectSocket 未返回 socketTask');
@@ -144,6 +179,11 @@ export async function connect(clientId) {
           console.error('WebSocket 连接错误:', err, { clientId });
           stopHeartbeat();
           isConnecting = false;
+          
+          // 2025-07-25: 连接错误时清理资源，避免泄漏
+          if (socketTask) {
+            socketTask = null;
+          }
           reject(err);
         });
 
@@ -308,26 +348,44 @@ export function isConnected() {
 }
 
 export function closeWebSocket() {
+  // 2025-07-25: 优化连接关闭逻辑，避免连接泄漏
   if (socketTask) {
+    const currentReadyState = socketTask.readyState;
+    console.log('关闭WebSocket连接', { 
+      readyState: currentReadyState,
+      clientId: socketTask.clientId 
+    });
+    
     try {
-      socketTask.close({
-        code: 1000,
-        reason: 'normal closure',
-        success: () => {
-          console.log('WebSocket 关闭成功');
-        },
-        fail: (err) => {
-          console.error('WebSocket 关闭失败:', err);
-        },
-      });
+      // 只有在连接状态为连接中或已连接时才关闭
+      if (currentReadyState === 0 || currentReadyState === 1) {
+        socketTask.close({
+          code: 1000,
+          reason: 'normal closure',
+          success: () => {
+            console.log('WebSocket 关闭成功');
+          },
+          fail: (err) => {
+            console.warn('WebSocket 关闭失败:', err);
+          },
+        });
+      } else {
+        console.log('WebSocket已处于关闭状态，跳过关闭操作');
+      }
     } catch (error) {
-      console.error('关闭 WebSocket 错误:', error);
+      console.warn('关闭 WebSocket 时出错:', error);
     }
+    
     socketTask = null;
   }
+  
   stopHeartbeat();
-  messageCallbacks = [];
-  console.log('WebSocket 已清理');
+  // 2025-07-25: 保留消息回调，以便重连后继续使用
+  // messageCallbacks = []; // 不清空回调，保留给下次连接
+  console.log('WebSocket 资源已清理', {
+    hasSocketTask: !!socketTask,
+    callbackCount: messageCallbacks.length
+  });
 }
 
 /**

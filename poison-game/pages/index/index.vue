@@ -414,6 +414,16 @@ export default {
       // 移除昵称检查，支持游客模式
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
       
+      // 2025-07-25: 检查现有WebSocket连接是否可用
+      if (isConnected() && this.clientId) {
+        console.log('检测到有效的WebSocket连接，直接使用:', {
+          clientId: this.clientId,
+          readyState: socketTask?.readyState
+        });
+        this.registerMessageHandler();
+        return;
+      }
+      
       // 2025-07-25: 优化clientId生成 - 检查是否已有有效的clientId
       const existingClientId = uni.getStorageSync('clientId');
       const now = Date.now();
@@ -460,7 +470,22 @@ export default {
         this.registerMessageHandler();
       } catch (error) {
         console.error('WebSocket 初始化失败:', error);
-        uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
+        
+        // 2025-07-25: 优化错误处理 - 区分不同类型的错误
+        if (error.message && error.message.includes('exceed max task count')) {
+          console.warn('超出微信Socket连接数限制，稍后重试');
+          uni.showToast({ 
+            title: '连接数超限，请稍后再试', 
+            icon: 'none',
+            duration: 2000
+          });
+          // 延迟重试，等待其他连接释放
+          setTimeout(() => {
+            this.initWebSocket();
+          }, 3000 + Math.random() * 2000);
+        } else {
+          uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
+        }
         uni.hideLoading();
       }
     },
@@ -748,14 +773,15 @@ export default {
                 timestamp: Date.now()
               });
               
-              // 2025-07-25: 优化clientId冲突处理 - 延迟重试避免快速重复生成
+              // 2025-07-25: 优化clientId冲突处理 - 先关闭连接再重新生成ID
               closeWebSocket();
               setTimeout(async () => {
+                // 只有冲突时才清理clientId并重新生成
                 uni.removeStorageSync('clientId');
                 this.clientId = '';
-                console.log('延迟重新初始化WebSocket，避免ID冲突');
+                console.log('冲突后重新初始化WebSocket，生成新ID');
                 await this.initWebSocket();
-              }, 1000 + Math.random() * 2000); // 随机延迟1-3秒
+              }, 2000 + Math.random() * 1000); // 随机延迟2-3秒，避免并发
             }
           } else if (data.type === 'leftRoom') {
             console.log('收到 leftRoom 确认:', data);
@@ -1016,14 +1042,21 @@ export default {
       clearTimeout(this.createTimeout);
       console.log('清理超时计时器');
     }
+    
+    // 2025-07-25: 优化页面卸载逻辑 - 保留clientId和WebSocket连接以便复用
     if (isConnected() && this.clientId && this.roomId) {
       sendMessage({ action: 'leaveRoom', clientId: this.clientId, roomId: this.roomId });
     }
-    closeWebSocket();
-    uni.removeStorageSync('clientId');
-    this.clientId = '';
+    
+    // 不关闭WebSocket连接，保留给下次使用
+    // closeWebSocket(); // 注释掉，避免关闭连接
+    
+    // 不清理clientId，保留给下次使用
+    // uni.removeStorageSync('clientId'); // 注释掉，保留clientId
+    // this.clientId = ''; // 注释掉，保留clientId
+    
     this.hasNavigated = false;
-    console.log('清理 clientId');
+    console.log('页面卸载完成，保留WebSocket连接和clientId以便复用');
   },
   onReady() {
     console.log('首页已准备');
