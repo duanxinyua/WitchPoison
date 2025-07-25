@@ -20,21 +20,13 @@ const dbConfig = {
   password: '7HSEG6NB64Cy3ZpH',
   database: 'witch_poison_game',
   charset: 'utf8mb4',
-  connectTimeout: 60000,
-  acquireTimeout: 60000,
-  timeout: 60000,
   // 连接池配置
   connectionLimit: 5,
   queueLimit: 0,
   // MySQL 9.0 兼容性配置
   ssl: false,
-  // 新的认证插件配置
-  authPlugins: {
-    mysql_native_password: () => () => {
-      console.log('使用 mysql_native_password 认证插件');
-      return Buffer.from(dbConfig.password + '\0');
-    }
-  }
+  // 移除已弃用的配置选项
+  // connectTimeout, acquireTimeout, timeout 在新版本中不再支持
 };
 
 // 创建连接池
