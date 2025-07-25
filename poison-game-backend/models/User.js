@@ -140,7 +140,8 @@ class User {
           province: province || existingUser.province,
           country: country || existingUser.country,
           login_ip: loginIp,
-          login_time: new Date()
+          login_time: new Date(),
+          last_login_time: new Date()
         });
         
         return updatedUser;
@@ -331,17 +332,17 @@ class User {
       `;
 
       const params = [
-        session_key,
-        nickname,
-        avatar_emoji,
-        avatar_url,
-        gender,
-        city,
-        province,
-        country,
-        login_ip,
-        login_time,
-        last_login_time,
+        session_key || null,
+        nickname || null,
+        avatar_emoji || null,
+        avatar_url || null,
+        gender !== undefined ? gender : null,
+        city || null,
+        province || null,
+        country || null,
+        login_ip || null,
+        login_time || null,
+        last_login_time || null,
         userId
       ];
 
