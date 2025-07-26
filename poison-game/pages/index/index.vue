@@ -121,7 +121,6 @@
 <script>
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
 import { autoLogin, getCurrentUser, isLoggedIn } from '../../utils/auth';
-import config from '../../config/index.js';
 
 /**
  * 生成随机昵称函数
@@ -253,7 +252,7 @@ export default {
       // 转换为大写并只保留数字和字母
       value = value.toUpperCase().replace(/[^0-9A-Z]/g, '');
       // 更新输入值
-      this.$set(this, 'roomId', value);
+      this.roomId = value;
     },
     /**
      * 生成游客昵称 - 2025-07-25: 使用扩展的词库生成昵称
@@ -262,47 +261,13 @@ export default {
     generateGuestNickname() {
       return generateRandomNickname();
     },
-    
-    /**
-     * 生成唯一的客户端ID
-     * 2025-07-25: 修复clientId重复问题，确保每次生成的ID都是唯一的
-     * @returns {string} 唯一的客户端ID
-     */
-    generateUniqueClientId() {
-      // 2025-07-25: 增强clientId唯一性 - 添加毫秒级时间戳和更长随机字符串
-      const timestamp = Date.now();
-      const microTimestamp = performance.now().toString().replace('.', ''); // 添加高精度时间戳
-      const randomStr1 = Math.random().toString(36).substr(2, 8); // 第一个随机字符串
-      const randomStr2 = Math.random().toString(36).substr(2, 8); // 第二个随机字符串
-      const deviceInfo = wx.getSystemInfoSync?.() || {};
-      const rawDeviceId = deviceInfo.brand || deviceInfo.model || deviceInfo.platform || 'unknown';
-      
-      // 2025-07-25: 确保设备ID只包含URL安全字符 - 移除所有特殊字符
-      const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
-      
-      // 组合生成唯一ID，确保格式统一和高度唯一性
-      const clientId = `client_${timestamp}_${microTimestamp}_${randomStr1}_${randomStr2}_${deviceId}`;
-      
-      console.log('生成唯一clientId:', {
-        timestamp,
-        microTimestamp,
-        randomStr1,
-        randomStr2,
-        rawDeviceId,
-        cleanDeviceId: deviceId,
-        finalId: clientId,
-        length: clientId.length
-      });
-      
-      return clientId;
-    },
     openNicknameModal() {
-      this.$set(this, 'tempNickname', this.nickname);
-      this.$set(this, 'showNicknameModal', true);
+      this.tempNickname = this.nickname;
+      this.showNicknameModal = true;
     },
     closeNicknameModal() {
-      this.$set(this, 'showNicknameModal', false);
-      this.$set(this, 'tempNickname', '');
+      this.showNicknameModal = false;
+      this.tempNickname = '';
     },
     async saveCustomization() {
       if (!this.tempNickname.trim()) {
@@ -314,9 +279,9 @@ export default {
       uni.setStorageSync('nickname', this.tempNickname.trim());
       uni.setStorageSync('userAvatar', this.userAvatar); // 确保头像也被保存
       uni.setStorageSync('manuallySetNickname', 'true'); // 标记为手动设置
-      this.$set(this, 'nickname', this.tempNickname.trim());
-      this.$set(this, 'nicknameSaved', true);
-      this.$set(this, 'isFirstTime', false);
+      this.nickname = this.tempNickname.trim();
+      this.nicknameSaved = true;
+      this.isFirstTime = false;
       
       // 如果用户已登录微信，同步个性化信息到数据库
       if (this.isLoggedIn && !this.userInfo?.is_guest) {
@@ -387,107 +352,42 @@ export default {
     },
     openCreateRoomModal() {
       console.log('打开创建房间模态框');
-      this.$set(this, 'showCreateRoomModal', true);
-      this.$set(this, 'showJoinRoomModal', false);
+      this.showCreateRoomModal = true;
+      this.showJoinRoomModal = false;
     },
     openJoinRoomModal() {
       console.log('打开加入房间模态框');
-      this.$set(this, 'roomId', '');
-      this.$set(this, 'showJoinRoomModal', true);
-      this.$set(this, 'showCreateRoomModal', false);
+      this.roomId = '';
+      this.showJoinRoomModal = true;
+      this.showCreateRoomModal = false;
     },
     closeJoinRoomModal() {
-      this.$set(this, 'showJoinRoomModal', false);
-      this.$set(this, 'roomId', '');
+      this.showJoinRoomModal = false;
+      this.roomId = '';
     },
     updateBoardSize(delta) {
       const newSize = Math.max(5, Math.min(10, this.boardSize + delta));
-      this.$set(this, 'boardSize', newSize);
+      this.boardSize = newSize;
       console.log('更新棋盘尺寸:', newSize);
     },
     updatePlayerCount(delta) {
       const newCount = Math.max(2, Math.min(5, this.playerCount + delta));
-      this.$set(this, 'playerCount', newCount);
+      this.playerCount = newCount;
       console.log('更新玩家人数:', newCount);
     },
     async initWebSocket() {
       // 移除昵称检查，支持游客模式
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
-      
-      // 2025-07-25: 检查现有WebSocket连接和clientId是否可用
-      const existingClientId = uni.getStorageSync('clientId');
-      if (isConnected() && existingClientId) {
-        console.log('检测到有效的WebSocket连接，直接使用:', {
-          clientId: existingClientId,
-          connectedState: isConnected()
-        });
-        this.clientId = existingClientId; // 设置实例变量
-        this.registerMessageHandler();
-        return;
-      }
-      
-      // 2025-07-25: 优化clientId生成 - 检查是否已有有效的clientId
-      // existingClientId 已经在上面获取过了，不用重复获取
-      const now = Date.now();
-      const isValidClientId = existingClientId && 
-                             existingClientId.length > 0 && 
-                             existingClientId.startsWith('client_') &&
-                             existingClientId.split('_').length >= 6; // 2025-07-25: 更新验证规则，匹配新的ID格式
-                             
-      // 检查clientId是否过期（超过24小时强制更新）
-      const clientIdExpired = existingClientId && existingClientId.includes('_') && 
-                              (now - parseInt(existingClientId.split('_')[1]) > 24 * 60 * 60 * 1000);
-      
-      // 2025-07-25: 优化clientId复用逻辑 - 减少重复生成，增强稳定性
-      if (isValidClientId && !clientIdExpired) {
-        this.clientId = existingClientId;
-        console.log('使用已存在的有效 clientId:', {
-          clientId: this.clientId,
-          age: Math.round((now - parseInt(existingClientId.split('_')[1])) / 1000 / 60), // 分钟
-          parts: existingClientId.split('_').length
-        });
-      } else {
-        if (clientIdExpired) {
-          console.log('clientId已过期，生成新的:', { 
-            old: existingClientId,
-            ageHours: Math.round((now - parseInt(existingClientId.split('_')[1])) / 1000 / 60 / 60)
-          });
-        } else if (!isValidClientId) {
-          console.log('无效的clientId格式，生成新的:', {
-            old: existingClientId,
-            length: existingClientId?.length,
-            hasPrefix: existingClientId?.startsWith('client_'),
-            partCount: existingClientId?.split('_').length
-          });
-        }
-        
-        // 生成新的clientId并立即保存，避免并发问题
-        this.clientId = this.generateUniqueClientId();
-        uni.setStorageSync('clientId', this.clientId);
-        console.log('生成并保存新的 clientId:', this.clientId);
-      }
+      this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      uni.setStorageSync('clientId', this.clientId);
+      console.log('初始化 clientId:', this.clientId);
       try {
         await connect(this.clientId);
         console.log('WebSocket 连接成功，准备注册消息回调');
         this.registerMessageHandler();
       } catch (error) {
         console.error('WebSocket 初始化失败:', error);
-        
-        // 2025-07-25: 优化错误处理 - 区分不同类型的错误
-        if (error.message && error.message.includes('exceed max task count')) {
-          console.warn('超出微信Socket连接数限制，稍后重试');
-          uni.showToast({ 
-            title: '连接数超限，请稍后再试', 
-            icon: 'none',
-            duration: 2000
-          });
-          // 延迟重试，等待其他连接释放
-          setTimeout(() => {
-            this.initWebSocket();
-          }, 3000 + Math.random() * 2000);
-        } else {
-          uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
-        }
+        uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
         uni.hideLoading();
       }
     },
@@ -527,20 +427,17 @@ export default {
         return;
       }
       
-      this.$set(this, 'isCreating', true);
+      this.isCreating = true;
       uni.showLoading({ title: '创建房间中...', mask: true });
 
       if (!isConnected()) {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
-          // 2025-07-25: 使用统一的clientId生成方法
-          const newClientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', newClientId);
-          console.log('生成新 clientId:', newClientId);
-          await connect(newClientId);
-          // 2025-07-25: 连接成功后更新实例变量，确保消息发送时使用正确的clientId
-          this.clientId = newClientId;
-          console.log('WebSocket 重新连接成功，更新clientId:', this.clientId);
+          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          uni.setStorageSync('clientId', this.clientId);
+          console.log('生成新 clientId:', this.clientId);
+          await connect(this.clientId);
+          console.log('WebSocket 重新连接成功，注册消息回调');
           if (this.removeMessageCallback) {
             this.removeMessageCallback();
           }
@@ -591,8 +488,8 @@ export default {
         }
         uni.hideLoading();
         uni.showToast({ title: '创建房间失败，请重试', icon: 'error' });
-        this.$set(this, 'isCreating', false);
-        this.$set(this, 'showCreateRoomModal', false);
+        this.isCreating = false;
+        this.showCreateRoomModal = false;
       }
     },
     /**
@@ -633,14 +530,11 @@ export default {
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
-          // 2025-07-25: 使用统一的clientId生成方法
-          const newClientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', newClientId);
-          console.log('生成新 clientId:', newClientId);
-          await connect(newClientId);
-          // 2025-07-25: 连接成功后更新实例变量，确保消息发送时使用正确的clientId
-          this.clientId = newClientId;
-          console.log('WebSocket 重新连接成功，更新clientId:', this.clientId);
+          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          uni.setStorageSync('clientId', this.clientId);
+          console.log('生成新 clientId:', this.clientId);
+          await connect(this.clientId);
+          console.log('WebSocket 重新连接成功，注册消息回调');
           if (this.removeMessageCallback) {
             this.removeMessageCallback();
           }
@@ -697,11 +591,11 @@ export default {
               clearTimeout(this.createTimeout);
               this.createTimeout = null;
             }
-            this.$set(this, 'roomId', data.roomId);
-            this.$set(this, 'showCreateRoomModal', false);
+            this.roomId = data.roomId;
+            this.showCreateRoomModal = false;
             if (this.isCreating) {
               uni.hideLoading();
-              this.$set(this, 'isCreating', false);
+              this.isCreating = false;
             }
             uni.showToast({ title: '房间创建成功', icon: 'success' });
             const gameState = encodeURIComponent(JSON.stringify(data));
@@ -763,27 +657,17 @@ export default {
                 this.createTimeout = null;
               }
               uni.hideLoading();
-              this.$set(this, 'isCreating', false);
-              this.$set(this, 'showCreateRoomModal', false);
+              this.isCreating = false;
+              this.showCreateRoomModal = false;
             }
-            this.$set(this, 'showJoinRoomModal', false);
-            this.$set(this, 'hasNavigated', false);
+            this.showJoinRoomModal = false;
+            this.hasNavigated = false;
             if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
-              console.warn('clientId 冲突，延迟后重新尝试:', {
-                message: data.message,
-                currentClientId: this.clientId,
-                timestamp: Date.now()
-              });
-              
-              // 2025-07-25: 优化clientId冲突处理 - 先关闭连接再重新生成ID
+              console.warn('clientId 无效，重新初始化 WebSocket');
               closeWebSocket();
-              setTimeout(async () => {
-                // 只有冲突时才清理clientId并重新生成
-                uni.removeStorageSync('clientId');
-                this.clientId = '';
-                console.log('冲突后重新初始化WebSocket，生成新ID');
-                await this.initWebSocket();
-              }, 2000 + Math.random() * 1000); // 随机延迟2-3秒，避免并发
+              uni.removeStorageSync('clientId');
+              this.clientId = '';
+              this.initWebSocket();
             }
           } else if (data.type === 'leftRoom') {
             console.log('收到 leftRoom 确认:', data);
@@ -827,7 +711,7 @@ export default {
       try {
         const response = await new Promise((resolve, reject) => {
           wx.request({
-            url: `${config.apiUrl}/api/auth/update-custom-info`,
+            url: `${require('../config/index.js').default.apiUrl}/api/auth/update-custom-info`,
             method: 'POST',
             data: {
               nickname: this.nickname,
@@ -964,8 +848,8 @@ export default {
       try {
         uni.showLoading({ title: '正在登录...' });
         
-        const authModule = await import('../../utils/auth');
-        const loginResult = await authModule.wxLogin();
+        const { wxLogin } = require('../../utils/auth');
+        const loginResult = await wxLogin();
         
         if (loginResult && loginResult.success) {
           this.setUserData(loginResult);
@@ -1031,7 +915,7 @@ export default {
     // 页面显示时更新头像（可能在头像选择页面更改了）
     const storedAvatar = uni.getStorageSync('userAvatar');
     if (storedAvatar && storedAvatar !== this.userAvatar) {
-      this.$set(this, 'userAvatar', storedAvatar);
+      this.userAvatar = storedAvatar;
     }
   },
   onUnload() {
@@ -1044,21 +928,14 @@ export default {
       clearTimeout(this.createTimeout);
       console.log('清理超时计时器');
     }
-    
-    // 2025-07-25: 优化页面卸载逻辑 - 保留clientId和WebSocket连接以便复用
     if (isConnected() && this.clientId && this.roomId) {
       sendMessage({ action: 'leaveRoom', clientId: this.clientId, roomId: this.roomId });
     }
-    
-    // 不关闭WebSocket连接，保留给下次使用
-    // closeWebSocket(); // 注释掉，避免关闭连接
-    
-    // 不清理clientId，保留给下次使用
-    // uni.removeStorageSync('clientId'); // 注释掉，保留clientId
-    // this.clientId = ''; // 注释掉，保留clientId
-    
+    closeWebSocket();
+    uni.removeStorageSync('clientId');
+    this.clientId = '';
     this.hasNavigated = false;
-    console.log('页面卸载完成，保留WebSocket连接和clientId以便复用');
+    console.log('清理 clientId');
   },
   onReady() {
     console.log('首页已准备');
