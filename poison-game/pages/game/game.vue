@@ -18,7 +18,7 @@
       :game-started="gameStarted"
       :poison-set="!!players.find(p => p.id === clientId)?.poisonPos"
       :game-result="gameResult"
-      :current-player-poison="getCurrentPlayerPoisonPos()"
+      :current-player-poison="currentPlayerPoisonPos"
       :status="status"
       @cell-click="handleCellClick"
     />
@@ -61,6 +61,15 @@ export default {
       hasJoined: false,
     };
   },
+  
+  // 2025-07-26: 添加computed属性，减少方法调用频率
+  computed: {
+    currentPlayerPoisonPos() {
+      const currentPlayer = this.players.find(p => p.id === this.clientId);
+      return currentPlayer ? currentPlayer.poisonPos : null;
+    }
+  },
+  
   methods: {
     async init() {
       this.clientId = uni.getStorageSync('clientId');
@@ -519,10 +528,8 @@ export default {
       const currentPlayer = this.players.find(p => p.id === this.clientId);
       return currentPlayer ? `${currentPlayer.name} (${currentPlayer.emoji})` : '未知玩家';
     },
-    getCurrentPlayerPoisonPos() {
-      const currentPlayer = this.players.find(p => p.id === this.clientId);
-      return currentPlayer ? currentPlayer.poisonPos : null;
-    },
+    // 2025-07-26: 移除方法，已改为computed属性
+    // getCurrentPlayerPoisonPos() { ... }
   },
   onLoad(options) {
     console.log('游戏页面加载:', options);
@@ -561,10 +568,14 @@ export default {
   },
   onUnload() {
     console.log('游戏页面卸载');
+    
+    // 清理消息回调
     if (this.removeMessageCallback) {
       this.removeMessageCallback();
       this.removeMessageCallback = null;
     }
+    
+    // 清理所有定时器
     if (this.leaveTimeout) {
       clearTimeout(this.leaveTimeout);
       this.leaveTimeout = null;
@@ -578,9 +589,16 @@ export default {
       this.flipTileTimeout = null;
     }
     
+    // 2025-07-26: 清理游戏数据，避免组件继续引用
+    this.board = [];
+    this.players = [];
+    this.currentPlayer = null;
+    this.gameResult = null;
+    this.status = 'waiting';
+    
     // 2025-07-25: 游戏页面不关闭WebSocket连接，保留给首页继续使用
     // closeWebSocket(); // 注释掉，避免关闭连接
-    console.log('游戏页面卸载完成，保留WebSocket连接给首页使用');
+    console.log('游戏页面卸载完成，已清理游戏数据，保留WebSocket连接给首页使用');
   },
   onBackPress() {
     // 拦截返回按钮，直接返回首页

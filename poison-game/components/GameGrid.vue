@@ -8,7 +8,7 @@
         :class="{ 
           poison: cell === 'poison', 
           disabled: cell || gameResult,
-          'poison-hint': showPoisonHint(rowIndex, colIndex)
+          'poison-hint': shouldShowPoisonHint(rowIndex, colIndex)
         }"
         :data-row="rowIndex"
         :data-col="colIndex"
@@ -16,7 +16,7 @@
       >
         <text v-if="cell === 'poison'">💀</text>
         <text v-else-if="cell">{{ cell }}</text>
-        <text v-else-if="showPoisonHint(rowIndex, colIndex)">💀</text>
+        <text v-else-if="shouldShowPoisonHint(rowIndex, colIndex)">💀</text>
         <text v-else></text>
       </view>
     </view>
@@ -78,6 +78,19 @@ export default {
     boardSize() {
       return (this.board && Array.isArray(this.board)) ? this.board.length || 5 : 5;
     },
+    
+    // 2025-07-26: 缓存毒药提示状态，减少重复计算
+    poisonHintPosition() {
+      if (this.status === 'settingPoison' && this.currentPlayerPoison && 
+          typeof this.currentPlayerPoison.x === 'number' && 
+          typeof this.currentPlayerPoison.y === 'number') {
+        return {
+          x: this.currentPlayerPoison.x,
+          y: this.currentPlayerPoison.y
+        };
+      }
+      return null;
+    }
   },
   // 2025-07-25: 组件内部状态
   data() {
@@ -119,36 +132,12 @@ export default {
         });
       }
     },
-    showPoisonHint(row, col) {
-      // 只在设置毒药阶段显示自己的毒药位置
-      if (this.status === 'settingPoison' && this.currentPlayerPoison && 
-          typeof this.currentPlayerPoison.x === 'number' && 
-          typeof this.currentPlayerPoison.y === 'number') {
-        const shouldShow = this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
-        console.log('检查毒药提示:', { 
-          row, 
-          col, 
-          currentPlayerPoison: this.currentPlayerPoison, 
-          status: this.status, 
-          shouldShow 
-        });
-        return shouldShow;
+    // 2025-07-26: 优化毒药提示方法，使用computed属性减少重复计算，移除日志输出
+    shouldShowPoisonHint(row, col) {
+      if (!this.poisonHintPosition) {
+        return false;
       }
-      
-      // 调试：记录为什么不显示毒药提示
-      if (this.status === 'settingPoison') {
-        console.log('设置毒药阶段但不显示提示:', {
-          row,
-          col,
-          status: this.status,
-          currentPlayerPoison: this.currentPlayerPoison,
-          hasPoison: !!this.currentPlayerPoison,
-          poisonX: this.currentPlayerPoison?.x,
-          poisonY: this.currentPlayerPoison?.y
-        });
-      }
-      
-      return false;
+      return this.poisonHintPosition.x === row && this.poisonHintPosition.y === col;
     },
   },
   watch: {
@@ -158,7 +147,8 @@ export default {
           console.warn('GameGrid 收到无效的board数据:', newBoard);
           return;
         }
-        console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)));
+        // 2025-07-26: 移除频繁的board更新日志，避免性能问题
+        // console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)));
         // 安全地强制更新组件
         this.$nextTick(() => {
           try {
