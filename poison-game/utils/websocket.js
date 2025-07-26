@@ -143,10 +143,20 @@ export async function connect(clientId) {
         socketTask.onOpen((event) => {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           
-          // 2025-07-26: 修复socketTask被清理问题 - 检查socketTask是否仍然有效
+          // 2025-07-26: 彻底修复socketTask被清理问题 - 多重验证确保连接有效
           if (!socketTask) {
             console.error('onOpen回调中 socketTask 已被清理');
+            isConnecting = false;
             reject(new Error('socketTask 已被清理'));
+            return;
+          }
+          
+          // 验证socketTask的readyState，如果undefined说明连接异常
+          if (socketTask.readyState === undefined) {
+            console.error('onOpen回调中 socketTask.readyState 异常', { readyState: socketTask.readyState });
+            isConnecting = false;
+            socketTask = null;
+            reject(new Error('连接状态异常'));
             return;
           }
           
