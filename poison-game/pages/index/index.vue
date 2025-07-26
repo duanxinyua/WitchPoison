@@ -276,6 +276,43 @@ export default {
     },
     
     /**
+     * 生成超高唯一性的clientId
+     * 2025-07-26: 使用多重熵源确保唯一性，彻底解决Duplicate clientId问题
+     * @returns {string} 高度唯一的clientId
+     */
+    generateUniqueClientId() {
+      // 使用多重随机源确保唯一性
+      const timestamp = Date.now();                                      // 毫秒时间戳
+      const microTimestamp = performance.now().toString().replace('.', '').slice(-8); // 高精度时间戳
+      const randomStr1 = Math.random().toString(36).substr(2, 8);        // 第一个随机字符串
+      const randomStr2 = Math.random().toString(36).substr(2, 8);        // 第二个随机字符串  
+      const randomStr3 = Math.random().toString(36).substr(2, 6);        // 第三个随机字符串
+      const userSeed = (this.nickname || '').length + (this.userAvatar || '').length + Math.floor(Math.random() * 1000); // 用户操作随机性
+      const strongRandom = Math.random().toString(36).substr(2, 12) + Math.random().toString(36).substr(2, 12); // 强随机字符串
+      
+      // 设备信息增强唯一性
+      const deviceInfo = wx.getSystemInfoSync?.() || {};
+      const rawDeviceId = [deviceInfo.brand, deviceInfo.model, deviceInfo.platform, deviceInfo.version, deviceInfo.system]
+        .filter(Boolean).join('').slice(0, 10) || 'unknown';
+      const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
+      
+      const clientId = `client_${timestamp}_${microTimestamp}_${randomStr1}_${randomStr2}_${randomStr3}_${userSeed}_${deviceId}_${strongRandom}`.slice(0, 100);
+      
+      console.log('生成超高唯一性clientId:', {
+        timestamp,
+        microTimestamp,
+        randomComponents: [randomStr1, randomStr2, randomStr3].length,
+        userSeed,
+        deviceId,
+        strongRandomLength: strongRandom.length,
+        finalId: clientId,
+        finalLength: clientId.length
+      });
+      
+      return clientId;
+    },
+    
+    /**
      * 生成游客昵称 - 2025-07-25: 使用扩展的词库生成昵称
      * @returns {string} 生成的随机昵称
      */
@@ -397,20 +434,39 @@ export default {
       console.log('更新玩家人数:', newCount);
     },
     async initWebSocket() {
-      // 2025-07-26: 基于简化版本的修复 - 检查是否已有有效的clientId，避免重复生成
+      // 2025-07-26: 优化clientId生成算法，解决WebSocket连接冲突问题
       let existingClientId = uni.getStorageSync('clientId');
+      const now = Date.now();
       
-      if (!existingClientId || !existingClientId.startsWith('client_')) {
-        // 生成增强的clientId，提高唯一性
-        const timestamp = Date.now();
-        const randomStr1 = Math.random().toString(36).substr(2, 8);
-        const randomStr2 = Math.random().toString(36).substr(2, 8);
-        this.clientId = `client_${timestamp}_${randomStr1}_${randomStr2}`;
-        uni.setStorageSync('clientId', this.clientId);
-        console.log('生成新的 clientId:', this.clientId);
-      } else {
+      // 增强版clientId验证逻辑
+      const validateClientId = (clientId) => {
+        if (!clientId) return { valid: false, reason: 'clientId不存在' };
+        if (clientId.length <= 30) return { valid: false, reason: 'clientId长度不足' };
+        if (!clientId.startsWith('client_')) return { valid: false, reason: '缺少client_前缀' };
+        const parts = clientId.split('_');
+        if (parts.length < 8) return { valid: false, reason: `ID段数不足(${parts.length}/8)` };
+        const timestamp = parseInt(parts[1]);
+        if (isNaN(timestamp) || timestamp <= 0) return { valid: false, reason: '时间戳无效' };
+        const ageHours = (now - timestamp) / (1000 * 60 * 60);
+        if (ageHours > 24) return { valid: false, reason: `已过期(${Math.round(ageHours)}小时)` };
+        return { valid: true, age: Math.round((now - timestamp) / 1000 / 60) };
+      };
+      
+      const validation = validateClientId(existingClientId);
+      
+      if (validation.valid) {
         this.clientId = existingClientId;
-        console.log('使用现有 clientId:', this.clientId);
+        console.log('使用已存在的有效 clientId:', {
+          clientId: this.clientId,
+          age: validation.age,
+          parts: existingClientId.split('_').length
+        });
+      } else {
+        // 生成新的超高唯一性clientId并立即保存，避免并发问题
+        this.clientId = this.generateUniqueClientId();
+        uni.setStorageSync('clientId', this.clientId);
+        console.log('生成并保存新的 clientId:', this.clientId);
+        console.log('旧clientId验证失败:', validation.reason);
       }
       
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
@@ -467,7 +523,7 @@ export default {
       if (!isConnected()) {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
-          // 2025-07-26: 简化重连逻辑，直接调用初始化方法
+          // 2025-07-26: 优化重连逻辑，使用增强的clientId生成
           await this.initWebSocket();
           if (!this.clientId || !isConnected()) {
             uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
@@ -575,7 +631,7 @@ export default {
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
-          // 2025-07-26: 简化重连逻辑，直接调用初始化方法
+          // 2025-07-26: 优化重连逻辑，使用增强的clientId生成
           await this.initWebSocket();
           if (!this.clientId || !isConnected()) {
             throw new Error('WebSocket重连失败');
@@ -719,11 +775,20 @@ export default {
             this.showJoinRoomModal = false;
             this.hasNavigated = false;
             if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
-              console.warn('clientId 无效，重新初始化 WebSocket');
+              console.warn('clientId 冲突，延迟后重新尝试:', {
+                message: data.message,
+                currentClientId: this.clientId,
+                timestamp: Date.now()
+              });
+              
+              // 2025-07-26: 优化clientId冲突处理 - 延迟重试避免快速重复生成
               closeWebSocket();
-              uni.removeStorageSync('clientId');
-              this.clientId = '';
-              this.initWebSocket();
+              setTimeout(async () => {
+                uni.removeStorageSync('clientId');
+                this.clientId = '';
+                console.log('延迟重新初始化WebSocket，避免ID冲突');
+                await this.initWebSocket();
+              }, 1000 + Math.random() * 2000); // 随机延迟1-3秒
             }
           } else if (data.type === 'leftRoom') {
             console.log('收到 leftRoom 确认:', data);
@@ -1000,10 +1065,11 @@ export default {
       sendMessage({ action: 'leaveRoom', clientId: this.clientId, roomId: this.roomId });
     }
     closeWebSocket();
-    uni.removeStorageSync('clientId');
-    this.clientId = '';
+    // 2025-07-26: 不清理clientId，保持复用避免Duplicate错误
+    // uni.removeStorageSync('clientId');
+    // this.clientId = '';
     this.hasNavigated = false;
-    console.log('清理 clientId');
+    console.log('保留 clientId 以避免重复生成');
   },
   onReady() {
     console.log('首页已准备');

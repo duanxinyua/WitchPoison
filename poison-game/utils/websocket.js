@@ -143,24 +143,15 @@ export async function connect(clientId) {
         socketTask.onOpen((event) => {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           
-          // 2025-07-25: 修夏WebSocket状态管理问题
-          clearTimeout(timeout);
-          isConnecting = false;
-          
-          // 确保在onOpen回调中就有正确的readyState
-          if (socketTask && socketTask.readyState !== 1) {
-            console.warn('onOpen时readyState不正常，强制设置为1', {
-              currentState: socketTask.readyState
-            });
-            // 不能直接修改readyState，但可以等待一下
-          }
-          
-          // 2025-07-26: 移除延迟，直接处理，避免竞态条件
+          // 2025-07-26: 修复socketTask被清理问题 - 检查socketTask是否仍然有效
           if (!socketTask) {
             console.error('onOpen回调中 socketTask 已被清理');
             reject(new Error('socketTask 已被清理'));
             return;
           }
+          
+          clearTimeout(timeout);
+          isConnecting = false;
           
           // 立即绑定消息处理器
           bindMessageHandler();
