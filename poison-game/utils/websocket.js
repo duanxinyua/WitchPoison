@@ -22,6 +22,7 @@ const HEARTBEAT_INTERVAL = 30000; // 心跳间隔时间(ms)
 // 连接状态管理
 let heartbeatTimer = null;       // 心跳定时器
 let isConnecting = false;        // 是否正在连接中
+let currentConnectionId = 0;     // 2025-07-26: 连接ID计数器，用于区分不同的连接请求
 
 /**
  * 建立WebSocket连接
@@ -50,10 +51,12 @@ export async function connect(clientId) {
 
   // 强制关闭旧连接，避免连接泄漏
   if (socketTask) {
-    console.log('关闭现有WebSocket连接，避免连接泄漏', { 
+    const oldConnectionId = socketTask.connectionId || 'unknown';
+    console.log(`关闭现有WebSocket连接 #${oldConnectionId}，避免连接泄漏`, { 
       clientId, 
       oldReadyState: socketTask.readyState,
-      oldClientId: socketTask.clientId 
+      oldClientId: socketTask.clientId,
+      oldConnectionId
     });
     
     try {
@@ -69,8 +72,10 @@ export async function connect(clientId) {
     stopHeartbeat();
     isConnecting = false;
     
-    // 2025-07-25: 减少等待时间，但确保连接完全关闭
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // 2025-07-26: 优化等待时间 - 网络切换场景需要更长等待
+    const waitTime = oldConnectionId !== 'unknown' ? 300 : 100;
+    console.log(`等待 ${waitTime}ms 确保旧连接完全关闭`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
   }
 
   if (isConnecting) {
@@ -90,32 +95,54 @@ export async function connect(clientId) {
   }
 
   isConnecting = true;
+  
+  // 2025-07-26: 生成唯一连接ID，防止并发连接的竞态条件
+  const connectionId = ++currentConnectionId;
+  console.log(`开始建立连接 #${connectionId}`, { clientId });
+  
   let retries = MAX_RETRIES;
   let lastError = null;
 
   while (retries > 0) {
-    console.log(`尝试连接 WebSocket，剩余重试次数: ${retries}`, { clientId });
+    console.log(`尝试连接 WebSocket #${connectionId}，剩余重试次数: ${retries}`, { clientId });
     try {
       return await new Promise((resolve, reject) => {
         const wsUrl = `${config.wsUrl}?clientId=${encodeURIComponent(clientId)}`;
-        console.log('初始化 WebSocket:', { url: wsUrl });
+        console.log('初始化 WebSocket:', { url: wsUrl, connectionId });
 
-        socketTask = wx.connectSocket({
+        const newSocketTask = wx.connectSocket({
           url: wsUrl,
           success: () => {
-            console.log('wx.connectSocket 调用成功', { clientId });
+            console.log('wx.connectSocket 调用成功', { clientId, connectionId });
           },
           fail: (err) => {
-            console.error('wx.connectSocket 初始化失败:', err, { clientId });
+            console.error('wx.connectSocket 初始化失败:', err, { clientId, connectionId });
             isConnecting = false;
-            socketTask = null; // 2025-07-25: 失败时清理socketTask
             reject(err);
           },
         });
         
-        // 2025-07-25: 保存clientId到socketTask，便于连接复用判断
+        // 2025-07-26: 验证连接ID是否仍然有效，防止过期连接覆盖新连接
+        if (connectionId !== currentConnectionId) {
+          console.warn(`连接 #${connectionId} 已过期，当前连接为 #${currentConnectionId}，取消此连接`);
+          if (newSocketTask) {
+            try {
+              newSocketTask.close();
+            } catch (e) {
+              console.warn('关闭过期连接失败:', e);
+            }
+          }
+          reject(new Error('连接已过期'));
+          return;
+        }
+        
+        // 2025-07-26: 连接ID验证通过，设置为当前socketTask
+        socketTask = newSocketTask;
+        
+        // 保存连接信息到socketTask
         if (socketTask) {
           socketTask.clientId = clientId;
+          socketTask.connectionId = connectionId; // 2025-07-26: 保存连接ID用于验证
         }
 
         if (!socketTask) {
@@ -126,10 +153,23 @@ export async function connect(clientId) {
         }
 
         const timeout = setTimeout(() => {
-          console.error('WebSocket 连接超时', { clientId });
+          console.error(`WebSocket 连接超时 #${connectionId}`, { 
+            clientId, 
+            connectionId, 
+            currentConnectionId,
+            isExpired: connectionId !== currentConnectionId 
+          });
+          
+          // 2025-07-26: 只处理当前连接的超时
+          if (connectionId !== currentConnectionId) {
+            console.warn(`连接 #${connectionId} 已过期，忽略超时处理`);
+            return;
+          }
+          
           isConnecting = false;
-          // 2025-07-25: 连接超时时清理socketTask，避免状态不一致
-          if (socketTask) {
+          
+          // 清理超时的连接
+          if (socketTask && socketTask.connectionId === connectionId) {
             try {
               socketTask.close();
             } catch (e) {
@@ -137,23 +177,42 @@ export async function connect(clientId) {
             }
             socketTask = null;
           }
-          reject(new Error('WebSocket 连接超时'));
+          reject(new Error(`WebSocket 连接超时 #${connectionId}`));
         }, CONNECT_TIMEOUT);
 
         socketTask.onOpen((event) => {
-          console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
+          console.log(`WebSocket onOpen 触发 #${connectionId}`, { 
+            clientId, 
+            connectionId,
+            readyState: socketTask?.readyState,
+            currentConnectionId 
+          });
           
-          // 2025-07-26: 彻底修复socketTask被清理问题 - 多重验证确保连接有效
+          // 2025-07-26: 连接ID验证 - 确保这是当前有效的连接
+          if (connectionId !== currentConnectionId) {
+            console.warn(`onOpen回调中连接 #${connectionId} 已过期，当前连接为 #${currentConnectionId}，忽略此回调`);
+            // 过期连接的onOpen回调，直接忽略，不执行任何操作
+            return;
+          }
+          
+          // 2025-07-26: 多重验证确保连接有效
           if (!socketTask) {
-            console.error('onOpen回调中 socketTask 已被清理');
+            console.error(`onOpen回调中 socketTask 已被清理 #${connectionId}`);
             isConnecting = false;
             reject(new Error('socketTask 已被清理'));
             return;
           }
           
+          // 验证socketTask的连接ID是否匹配
+          if (socketTask.connectionId !== connectionId) {
+            console.warn(`onOpen回调中连接ID不匹配，期望 #${connectionId}，实际 #${socketTask.connectionId}`);
+            reject(new Error('连接ID不匹配'));
+            return;
+          }
+          
           // 验证socketTask的readyState，如果undefined说明连接异常
           if (socketTask.readyState === undefined) {
-            console.error('onOpen回调中 socketTask.readyState 异常', { readyState: socketTask.readyState });
+            console.error(`onOpen回调中 socketTask.readyState 异常 #${connectionId}`, { readyState: socketTask.readyState });
             isConnecting = false;
             socketTask = null;
             reject(new Error('连接状态异常'));
@@ -169,8 +228,9 @@ export async function connect(clientId) {
           // 启动心跳机制
           startHeartbeat(clientId);
           
-          console.log('WebSocket 连接完全建立', {
+          console.log(`WebSocket 连接完全建立 #${connectionId}`, {
               clientId,
+              connectionId,
               readyState: socketTask.readyState,
               messageHandlerBound: socketTask.onMessageBound,
               callbackCount: messageCallbacks.length
@@ -180,23 +240,41 @@ export async function connect(clientId) {
         });
 
         socketTask.onError((err) => {
+          console.error(`WebSocket 连接错误 #${connectionId}:`, err, { clientId, connectionId });
+          
+          // 2025-07-26: 连接ID验证 - 只处理当前连接的错误
+          if (connectionId !== currentConnectionId) {
+            console.warn(`连接 #${connectionId} 已过期，忽略错误回调`);
+            return;
+          }
+          
           clearTimeout(timeout);
-          console.error('WebSocket 连接错误:', err, { clientId });
           stopHeartbeat();
           isConnecting = false;
           
-          // 2025-07-25: 连接错误时清理资源，避免泄漏
-          if (socketTask) {
+          // 清理当前连接资源
+          if (socketTask && socketTask.connectionId === connectionId) {
             socketTask = null;
           }
           reject(err);
         });
 
         socketTask.onClose((event) => {
-          console.log('WebSocket 连接关闭:', event, { clientId });
+          console.log(`WebSocket 连接关闭 #${connectionId}:`, event, { clientId, connectionId });
+          
+          // 2025-07-26: 连接ID验证 - 只处理当前连接的关闭
+          if (connectionId !== currentConnectionId) {
+            console.warn(`连接 #${connectionId} 已过期，忽略关闭回调`);
+            return;
+          }
+          
           stopHeartbeat();
-          socketTask = null;
           isConnecting = false;
+          
+          // 只清理匹配的socketTask
+          if (socketTask && socketTask.connectionId === connectionId) {
+            socketTask = null;
+          }
           
           // 2025-07-26: 智能处理连接关闭 - 特殊处理Duplicate clientId错误
           if (event.code === 4001 && event.reason === 'Replaced by new connection') {
@@ -222,12 +300,31 @@ export async function connect(clientId) {
         });
       });
     } catch (error) {
-      console.error('WebSocket 连接失败:', error, { clientId, retries });
+      console.error(`WebSocket 连接失败 #${connectionId}:`, error, { clientId, connectionId, retries });
       lastError = error;
       retries--;
+      
       if (retries > 0) {
-        console.log(`等待 ${RETRY_DELAY}ms 后重试...`);
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        // 2025-07-26: 智能重试延迟 - 根据错误类型调整延迟时间
+        let retryDelay = RETRY_DELAY;
+        const errorMessage = error.message || '';
+        
+        if (errorMessage.includes('超时')) {
+          retryDelay = RETRY_DELAY * 2; // 超时错误需要更长延迟
+        } else if (errorMessage.includes('已过期')) {
+          retryDelay = 100; // 连接过期可以快速重试
+        } else if (errorMessage.includes('网络')) {
+          retryDelay = RETRY_DELAY * 1.5; // 网络错误适中延迟
+        }
+        
+        console.log(`等待 ${retryDelay}ms 后重试 (剩余 ${retries} 次)...`, { errorType: errorMessage });
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      } else {
+        console.error(`WebSocket 连接失败，已达最大重试次数 #${connectionId}`, { 
+          clientId, 
+          connectionId,
+          finalError: error.message 
+        });
       }
     }
   }
@@ -353,7 +450,12 @@ export function onMessage(callback) {
 
 export function isConnected() {
   const connected = socketTask && socketTask.readyState === 1;
-  console.log('检查 WebSocket 连接状态:', { connected, readyState: socketTask?.readyState });
+  console.log('检查 WebSocket 连接状态:', { 
+    connected, 
+    readyState: socketTask?.readyState, 
+    connectionId: socketTask?.connectionId,
+    currentConnectionId 
+  });
   return connected;
 }
 
