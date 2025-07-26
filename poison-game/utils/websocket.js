@@ -108,7 +108,15 @@ export async function connect(clientId) {
     try {
       return await new Promise((resolve, reject) => {
         const wsUrl = `${config.wsUrl}?clientId=${encodeURIComponent(clientId)}`;
-        console.log('初始化 WebSocket:', { url: wsUrl, connectionId });
+        console.log('初始化 WebSocket:', { 
+          url: wsUrl, 
+          connectionId,
+          configWsUrl: config.wsUrl,
+          clientId: clientId,
+          clientIdLength: clientId?.length,
+          encodedClientId: encodeURIComponent(clientId),
+          fullUrl: wsUrl
+        });
 
         const newSocketTask = wx.connectSocket({
           url: wsUrl,

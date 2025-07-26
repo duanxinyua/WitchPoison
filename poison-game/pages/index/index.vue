@@ -471,6 +471,14 @@ export default {
       
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
       
+      // 2025-07-26: 增加详细的clientId调试信息
+      console.log('准备建立WebSocket连接:', {
+        clientId: this.clientId,
+        clientIdLength: this.clientId?.length,
+        clientIdValid: this.clientId && this.clientId.length > 30,
+        nickname: this.nickname
+      });
+      
       try {
         await connect(this.clientId);
         console.log('WebSocket 连接成功，准备注册消息回调');

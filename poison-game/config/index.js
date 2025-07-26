@@ -27,8 +27,8 @@ const ENV_CONFIG = {
  * @returns {Object} 环境配置对象
  */
 function getEnvironmentConfig() {
-  // 判断当前环境 - 默认为生产环境
-  const isProduction = true; // 2025-07-25: 当前固定为生产环境，可根据需要调整
+  // 判断当前环境 - 使用生产环境
+  const isProduction = true; // 2025-07-26: 恢复生产环境配置
   
   const currentEnv = isProduction ? 'production' : 'development';
   const config = ENV_CONFIG[currentEnv];
