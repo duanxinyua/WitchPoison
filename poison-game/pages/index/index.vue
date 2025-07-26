@@ -255,6 +255,48 @@ export default {
       // 更新输入值
       this.roomId = value;
     },
+    
+    /**
+     * 生成唯一的客户端ID
+     * 2025-07-26: 使用多重随机源确保唯一性，避免重复连接问题
+     * @returns {string} 唯一的客户端ID
+     */
+    generateUniqueClientId() {
+      const timestamp = Date.now();
+      const microTimestamp = performance.now().toString().replace('.', '').slice(-8);
+      const randomStr1 = Math.random().toString(36).substr(2, 8);
+      const randomStr2 = Math.random().toString(36).substr(2, 8);
+      const randomStr3 = Math.random().toString(36).substr(2, 6);
+      const processRandom = Math.floor(Math.random() * 10000);
+      
+      // 设备信息增强唯一性
+      const deviceInfo = wx.getSystemInfoSync?.() || {};
+      const rawDeviceId = [deviceInfo.brand, deviceInfo.model, deviceInfo.platform]
+        .filter(Boolean).join('').slice(0, 8) || 'unknown';
+      const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
+      
+      const clientId = `client_${timestamp}_${microTimestamp}_${randomStr1}_${randomStr2}_${randomStr3}_${processRandom}_${deviceId}`.slice(0, 100);
+      return clientId;
+    },
+    
+    /**
+     * 检查WebSocket连接状态
+     * 2025-07-26: 处理连接异常，特别是clientId重复问题
+     */
+    checkWebSocketStatus() {
+      if (!isConnected() && this.clientId) {
+        console.log('检测到WebSocket断开，准备重新连接');
+        // 延迟一点重新连接，避免与其他操作冲突
+        setTimeout(async () => {
+          try {
+            await this.initWebSocket();
+          } catch (error) {
+            console.error('WebSocket重连失败:', error);
+          }
+        }, 1000);
+      }
+    },
+    
     /**
      * 生成游客昵称 - 2025-07-25: 使用扩展的词库生成昵称
      * @returns {string} 生成的随机昵称
@@ -379,7 +421,8 @@ export default {
     async initWebSocket() {
       // 移除昵称检查，支持游客模式
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
-      this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // 2025-07-26: 使用增强的clientId生成算法，避免重复
+      this.clientId = this.generateUniqueClientId();
       uni.setStorageSync('clientId', this.clientId);
       console.log('初始化 clientId:', this.clientId);
       try {
@@ -434,7 +477,7 @@ export default {
       if (!isConnected()) {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          this.clientId = this.generateUniqueClientId();
           uni.setStorageSync('clientId', this.clientId);
           console.log('生成新 clientId:', this.clientId);
           await connect(this.clientId);
@@ -544,7 +587,7 @@ export default {
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          this.clientId = this.generateUniqueClientId();
           uni.setStorageSync('clientId', this.clientId);
           console.log('生成新 clientId:', this.clientId);
           await connect(this.clientId);
@@ -917,11 +960,16 @@ export default {
   },
   async onLoad() {
     console.log('首页加载');
-    uni.removeStorageSync('clientId');
-    this.clientId = '';
     
-    // 2025-07-25: 尝试自动登录
-    await this.performAutoLogin();
+    // 2025-07-26: 延迟初始化，避免与游戏页面清理产生竞态条件
+    setTimeout(async () => {
+      console.log('延迟初始化，避免页面切换竞态条件');
+      uni.removeStorageSync('clientId');
+      this.clientId = '';
+      
+      // 2025-07-25: 尝试自动登录
+      await this.performAutoLogin();
+    }, 500);
     
     // 如果是第一次使用，显示欢迎提示
     if (this.isFirstTime) {
@@ -952,6 +1000,9 @@ export default {
       console.log('页面重新显示，重置导航状态');
       this.hasNavigated = false;
     }
+    
+    // 2025-07-26: 检查WebSocket连接状态，处理可能的连接问题
+    this.checkWebSocketStatus();
   },
   onUnload() {
     console.log('首页卸载');

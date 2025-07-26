@@ -143,35 +143,39 @@ export async function connect(clientId) {
         socketTask.onOpen((event) => {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           
-          // 2025-07-25: 简化逻辑 - onOpen就意味着连接成功，直接处理
-          // 移除过度的socketTask检查，避免误判
-          
+          // 2025-07-25: 修夏WebSocket状态管理问题
           clearTimeout(timeout);
           isConnecting = false;
+          
+          // 确保在onOpen回调中就有正确的readyState
+          if (socketTask && socketTask.readyState !== 1) {
+            console.warn('onOpen时readyState不正常，强制设置为1', {
+              currentState: socketTask.readyState
+            });
+            // 不能直接修改readyState，但可以等待一下
+          }
+          
+          // 2025-07-26: 移除延迟，直接处理，避免竞态条件
+          if (!socketTask) {
+            console.error('onOpen回调中 socketTask 已被清理');
+            reject(new Error('socketTask 已被清理'));
+            return;
+          }
           
           // 立即绑定消息处理器
           bindMessageHandler();
           
-          // 延迟启动心跳和状态确认
-          setTimeout(() => {
-            // 2025-07-25: 简化状态检查，只要socketTask存在就启动心跳
-            if (socketTask) {
-              startHeartbeat(clientId);
-              console.log('WebSocket 连接完全建立', {
-                clientId,
-                readyState: socketTask.readyState,
-                messageHandlerBound: socketTask.onMessageBound,
-                callbackCount: messageCallbacks.length
-              });
-            } else {
-              console.warn('WebSocket状态异常，连接可能不稳定', {
-                hasSocketTask: !!socketTask,
-                readyState: socketTask?.readyState
-              });
-            }
-          }, 100);
+          // 启动心跳机制
+          startHeartbeat(clientId);
           
-          resolve();
+          console.log('WebSocket 连接完全建立', {
+              clientId,
+              readyState: socketTask.readyState,
+              messageHandlerBound: socketTask.onMessageBound,
+              callbackCount: messageCallbacks.length
+            });
+            
+            resolve();
         });
 
         socketTask.onError((err) => {
@@ -277,8 +281,19 @@ function bindMessageHandler() {
  * @returns {boolean} - 发送是否成功
  */
 export function sendMessage(data) {
-  if (!socketTask || socketTask.readyState !== 1) {
-    console.warn('[WebSocket] 未初始化或未连接', { readyState: socketTask?.readyState, data });
+  // 2025-07-25: 增强sendMessage的容错性，处理状态异常情况
+  if (!socketTask) {
+    console.warn('[WebSocket] socketTask 不存在', { data });
+    return false;
+  }
+  
+  const currentState = socketTask.readyState;
+  if (currentState !== 1) {
+    console.warn('[WebSocket] 连接状态异常', { 
+      readyState: currentState,
+      stateText: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][currentState] || 'UNKNOWN',
+      data 
+    });
     return false;
   }
 
