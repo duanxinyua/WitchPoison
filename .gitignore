@@ -44,3 +44,6 @@ ssh_pass
 
 # Server files
 poison-game-backend/.htaccess
+
+# Development documentation (local only)
+CLAUDE.md
