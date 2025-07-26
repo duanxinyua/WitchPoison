@@ -231,6 +231,7 @@ export default {
       clientId: '',
       removeMessageCallback: null,
       createTimeout: null,
+      joinTimeout: null,
       hasNavigated: false,
       tempNickname: '', // 临时昵称输入
       isFirstTime: isFirstTime, // 标记是否首次使用
@@ -525,8 +526,21 @@ export default {
           return;
         }
       }
+      
+      // 2025-07-26: 修复再次加入房间问题 - 设置当前房间ID
+      this.roomId = roomIdTrimmed;
       this.hasNavigated = true;
       uni.showLoading({ title: '加入房间中...', mask: true });
+      
+      // 2025-07-26: 添加加入房间超时机制
+      this.joinTimeout = setTimeout(() => {
+        console.error('加入房间超时，未收到 playerJoined 响应');
+        uni.hideLoading();
+        uni.showToast({ title: '加入房间超时，请重试', icon: 'error' });
+        this.showJoinRoomModal = false;
+        this.hasNavigated = false;
+        this.joinTimeout = null;
+      }, 10000);
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
@@ -556,6 +570,10 @@ export default {
         console.log('发送加入房间请求:', joinData);
       } catch (error) {
         console.error('加入房间错误:', error);
+        if (this.joinTimeout) {
+          clearTimeout(this.joinTimeout);
+          this.joinTimeout = null;
+        }
         uni.hideLoading();
         uni.showToast({ title: '加入房间失败，请重试', icon: 'error' });
         this.showJoinRoomModal = false;
@@ -625,6 +643,11 @@ export default {
               return;
             }
             if (data.state?.roomId === this.roomId && data.state?.players?.some(p => p.id === this.clientId)) {
+              // 2025-07-26: 清理加入房间超时
+              if (this.joinTimeout) {
+                clearTimeout(this.joinTimeout);
+                this.joinTimeout = null;
+              }
               this.showJoinRoomModal = false;
               uni.hideLoading();
               uni.showToast({ title: '加入房间成功', icon: 'success' });
@@ -659,6 +682,12 @@ export default {
               uni.hideLoading();
               this.isCreating = false;
               this.showCreateRoomModal = false;
+            }
+            // 2025-07-26: 错误时也需要清理加入房间超时
+            if (this.joinTimeout) {
+              clearTimeout(this.joinTimeout);
+              this.joinTimeout = null;
+              uni.hideLoading();
             }
             this.showJoinRoomModal = false;
             this.hasNavigated = false;
@@ -917,6 +946,12 @@ export default {
     if (storedAvatar && storedAvatar !== this.userAvatar) {
       this.userAvatar = storedAvatar;
     }
+    
+    // 2025-07-26: 修复退出后再次加入房间的问题 - 重置导航状态
+    if (this.hasNavigated) {
+      console.log('页面重新显示，重置导航状态');
+      this.hasNavigated = false;
+    }
   },
   onUnload() {
     console.log('首页卸载');
@@ -926,7 +961,11 @@ export default {
     }
     if (this.createTimeout) {
       clearTimeout(this.createTimeout);
-      console.log('清理超时计时器');
+      console.log('清理创建房间超时计时器');
+    }
+    if (this.joinTimeout) {
+      clearTimeout(this.joinTimeout);
+      console.log('清理加入房间超时计时器');
     }
     if (isConnected() && this.clientId && this.roomId) {
       sendMessage({ action: 'leaveRoom', clientId: this.clientId, roomId: this.roomId });
