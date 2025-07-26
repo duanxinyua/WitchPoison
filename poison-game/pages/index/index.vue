@@ -256,28 +256,6 @@ export default {
       this.roomId = value;
     },
     
-    /**
-     * 生成唯一的客户端ID
-     * 2025-07-26: 使用多重随机源确保唯一性，避免重复连接问题
-     * @returns {string} 唯一的客户端ID
-     */
-    generateUniqueClientId() {
-      const timestamp = Date.now();
-      const microTimestamp = performance.now().toString().replace('.', '').slice(-8);
-      const randomStr1 = Math.random().toString(36).substr(2, 8);
-      const randomStr2 = Math.random().toString(36).substr(2, 8);
-      const randomStr3 = Math.random().toString(36).substr(2, 6);
-      const processRandom = Math.floor(Math.random() * 10000);
-      
-      // 设备信息增强唯一性
-      const deviceInfo = wx.getSystemInfoSync?.() || {};
-      const rawDeviceId = [deviceInfo.brand, deviceInfo.model, deviceInfo.platform]
-        .filter(Boolean).join('').slice(0, 8) || 'unknown';
-      const deviceId = rawDeviceId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'unknown';
-      
-      const clientId = `client_${timestamp}_${microTimestamp}_${randomStr1}_${randomStr2}_${randomStr3}_${processRandom}_${deviceId}`.slice(0, 100);
-      return clientId;
-    },
     
     /**
      * 检查WebSocket连接状态
@@ -419,12 +397,24 @@ export default {
       console.log('更新玩家人数:', newCount);
     },
     async initWebSocket() {
-      // 移除昵称检查，支持游客模式
+      // 2025-07-26: 基于简化版本的修复 - 检查是否已有有效的clientId，避免重复生成
+      let existingClientId = uni.getStorageSync('clientId');
+      
+      if (!existingClientId || !existingClientId.startsWith('client_')) {
+        // 生成增强的clientId，提高唯一性
+        const timestamp = Date.now();
+        const randomStr1 = Math.random().toString(36).substr(2, 8);
+        const randomStr2 = Math.random().toString(36).substr(2, 8);
+        this.clientId = `client_${timestamp}_${randomStr1}_${randomStr2}`;
+        uni.setStorageSync('clientId', this.clientId);
+        console.log('生成新的 clientId:', this.clientId);
+      } else {
+        this.clientId = existingClientId;
+        console.log('使用现有 clientId:', this.clientId);
+      }
+      
       console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
-      // 2025-07-26: 使用增强的clientId生成算法，避免重复
-      this.clientId = this.generateUniqueClientId();
-      uni.setStorageSync('clientId', this.clientId);
-      console.log('初始化 clientId:', this.clientId);
+      
       try {
         await connect(this.clientId);
         console.log('WebSocket 连接成功，准备注册消息回调');
@@ -477,15 +467,13 @@ export default {
       if (!isConnected()) {
         console.log('WebSocket 未连接，尝试重新连接');
         try {
-          this.clientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
-          if (this.removeMessageCallback) {
-            this.removeMessageCallback();
+          // 2025-07-26: 简化重连逻辑，直接调用初始化方法
+          await this.initWebSocket();
+          if (!this.clientId || !isConnected()) {
+            uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
+            uni.hideLoading();
+            return;
           }
-          this.registerMessageHandler();
           await new Promise((resolve) => setTimeout(resolve, 2000));
         } catch (error) {
           console.error('WebSocket 重新连接失败:', error);
@@ -587,16 +575,12 @@ export default {
       try {
         if (!isConnected()) {
           console.log('WebSocket 未连接，尝试重新连接');
-          this.clientId = this.generateUniqueClientId();
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
-          if (this.removeMessageCallback) {
-            this.removeMessageCallback();
+          // 2025-07-26: 简化重连逻辑，直接调用初始化方法
+          await this.initWebSocket();
+          if (!this.clientId || !isConnected()) {
+            throw new Error('WebSocket重连失败');
           }
-          this.registerMessageHandler();
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         const joinData = {
           action: 'join',
@@ -961,15 +945,9 @@ export default {
   async onLoad() {
     console.log('首页加载');
     
-    // 2025-07-26: 延迟初始化，避免与游戏页面清理产生竞态条件
-    setTimeout(async () => {
-      console.log('延迟初始化，避免页面切换竞态条件');
-      uni.removeStorageSync('clientId');
-      this.clientId = '';
-      
-      // 2025-07-25: 尝试自动登录
-      await this.performAutoLogin();
-    }, 500);
+    // 2025-07-26: 基于简化版本的修复 - 简化初始化逻辑，去掉延迟和复杂的清理
+    // 2025-07-25: 尝试自动登录
+    await this.performAutoLogin();
     
     // 如果是第一次使用，显示欢迎提示
     if (this.isFirstTime) {
@@ -980,7 +958,7 @@ export default {
           icon: 'success',
           duration: 3000
         });
-      }, 500);
+      }, 1000);
     } else {
       console.log('用户信息已存在:', { nickname: this.nickname, avatar: this.userAvatar, nicknameSaved: this.nicknameSaved });
     }
