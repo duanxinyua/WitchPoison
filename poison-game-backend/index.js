@@ -557,15 +557,50 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
+  // 2025-07-26: 智能处理重复clientId - 区分合法重连和真正重复
   if (clients.has(clientId)) {
-    debugWarn('重复的 clientId，关闭旧连接', { clientId });
     const oldWs = clients.get(clientId);
-    oldWs.close(4001, 'Duplicate clientId');
+    const oldReadyState = oldWs.readyState;
+    const oldIsAlive = oldWs.isAlive;
+    
+    debugLog('检测到重复clientId，分析连接状态:', { 
+      clientId, 
+      oldReadyState: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][oldReadyState] || oldReadyState,
+      oldIsAlive,
+      oldIsAliveType: typeof oldIsAlive
+    });
+    
+    // 如果旧连接已经断开或无响应，直接替换
+    if (oldReadyState === WebSocket.CLOSED || oldReadyState === WebSocket.CLOSING || !oldIsAlive) {
+      debugLog('旧连接已断开，替换为新连接:', { clientId });
+      clients.delete(clientId);
+    } else {
+      // 旧连接仍然活跃，这可能是真正的重复连接
+      debugWarn('发现活跃的重复连接，关闭旧连接:', { 
+        clientId,
+        oldConnectionAge: Date.now() - (oldWs.connectedAt || 0)
+      });
+      
+      try {
+        oldWs.close(4001, 'Replaced by new connection');
+      } catch (closeError) {
+        debugError('关闭旧连接失败:', { clientId, error: closeError.message });
+      }
+      
+      // 给旧连接一点时间清理，然后清除记录
+      setTimeout(() => {
+        if (clients.has(clientId) && clients.get(clientId) === oldWs) {
+          clients.delete(clientId);
+          debugLog('延迟清理旧连接记录:', { clientId });
+        }
+      }, 100);
+    }
   }
 
   debugLog('客户端连接:', { clientId });
   ws.clientId = clientId;
   ws.isAlive = true;
+  ws.connectedAt = Date.now(); // 2025-07-26: 记录连接时间，用于重复连接分析
   clients.set(clientId, ws);
 
   send(clientId, { type: 'connected', clientId });
@@ -817,10 +852,25 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+// 2025-07-26: 优化心跳清理机制 - 更频繁地检测和清理断开的连接
 setInterval(() => {
   wss.clients.forEach(ws => {
+    // 检查连接状态，如果已断开则立即清理
+    if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      debugLog('检测到已断开的连接，立即清理:', { 
+        clientId: ws.clientId,
+        readyState: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState]
+      });
+      clients.delete(ws.clientId);
+      handleClientDisconnect(ws.clientId);
+      return;
+    }
+    
     if (!ws.isAlive) {
-      debugLog('客户端无响应，断开:', { clientId: ws.clientId });
+      debugLog('客户端无响应，断开:', { 
+        clientId: ws.clientId,
+        connectionAge: Date.now() - (ws.connectedAt || 0)
+      });
       ws.terminate();
       clients.delete(ws.clientId);
       handleClientDisconnect(ws.clientId);
@@ -830,7 +880,7 @@ setInterval(() => {
     ws.ping();
     debugLog('发送 ping:', { clientId: ws.clientId });
   });
-}, 30000);
+}, 15000); // 从30秒改为15秒，更快清理断开的连接
 
 function send(clientId, message) {
   const ws = clients.get(clientId);

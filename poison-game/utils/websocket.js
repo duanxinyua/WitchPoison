@@ -196,8 +196,29 @@ export async function connect(clientId) {
           console.log('WebSocket 连接关闭:', event, { clientId });
           stopHeartbeat();
           socketTask = null;
-          // 不清空messageCallbacks，保留回调以便重连后继续使用
           isConnecting = false;
+          
+          // 2025-07-26: 智能处理连接关闭 - 特殊处理Duplicate clientId错误
+          if (event.code === 4001 && event.reason === 'Replaced by new connection') {
+            console.log('连接被新连接替换，这是正常的重连行为');
+            // 对于被替换的连接，不需要特殊处理，让新连接正常工作
+          } else if (event.code === 4001) {
+            console.warn('收到Duplicate clientId关闭，可能是重连时序问题:', {
+              code: event.code,
+              reason: event.reason,
+              clientId
+            });
+            // 清空clientId缓存，强制生成新ID
+            try {
+              if (typeof uni !== 'undefined') {
+                uni.removeStorageSync('clientId');
+              }
+            } catch (e) {
+              console.warn('清理clientId缓存失败:', e);
+            }
+          }
+          
+          // 不清空messageCallbacks，保留回调以便重连后继续使用
         });
       });
     } catch (error) {
