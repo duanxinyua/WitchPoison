@@ -48,15 +48,16 @@ export async function connect(clientId) {
   isConnecting = true;
   let retries = MAX_RETRIES;
   let lastError = null;
+  let currentClientId = clientId;
 
   while (retries > 0) {
-    console.log(`尝试连接 WebSocket，剩余重试次数: ${retries}`, { clientId });
+    console.log(`尝试连接 WebSocket，剩余重试次数: ${retries}`, { clientId: currentClientId });
     try {
       return await new Promise((resolve, reject) => {
-        const wsUrl = `${config.wsUrl}?clientId=${encodeURIComponent(clientId)}`;
+        const wsUrl = `${config.wsUrl}?clientId=${encodeURIComponent(currentClientId)}`;
         console.log('初始化 WebSocket:', { url: wsUrl });
 
-        socketTask = wx.connectSocket({
+        const tempSocketTask = wx.connectSocket({
           url: wsUrl,
           success: () => {
             console.log('wx.connectSocket 调用成功', { clientId });
@@ -68,41 +69,55 @@ export async function connect(clientId) {
           },
         });
 
-        if (!socketTask) {
+        if (!tempSocketTask) {
           console.error('wx.connectSocket 未返回 socketTask');
           isConnecting = false;
           reject(new Error('wx.connectSocket 未返回 socketTask'));
           return;
         }
 
+        // 保存临时引用，避免在onOpen回调中丢失
+        const socketRef = tempSocketTask;
+        
         const timeout = setTimeout(() => {
           console.error('WebSocket 连接超时', { clientId });
           isConnecting = false;
           reject(new Error('WebSocket 连接超时'));
         }, CONNECT_TIMEOUT);
 
-        socketTask.onOpen(() => {
-          console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
+        socketRef.onOpen(() => {
+          console.log('WebSocket onOpen 触发', { 
+            clientId: currentClientId, 
+            readyState: socketRef?.readyState,
+            hasSocketRef: !!socketRef,
+            globalSocketTask: !!socketTask
+          });
+          
+          // 设置全局socketTask
+          socketTask = socketRef;
           clearTimeout(timeout);
           isConnecting = false;
+          
           // 确保在 onOpen 后 readyState 正确设置
           setTimeout(() => {
+            console.log('延迟执行绑定操作', { hasSocketTask: !!socketTask });
             bindMessageHandler();
-            startHeartbeat(clientId);
+            startHeartbeat(currentClientId);
             resolve();
           }, 100);
         });
 
-        socketTask.onError((err) => {
+        socketRef.onError((err) => {
           clearTimeout(timeout);
-          console.error('WebSocket 连接错误:', err, { clientId });
+          console.error('WebSocket 连接错误:', err, { clientId: currentClientId });
           stopHeartbeat();
           isConnecting = false;
+          socketTask = null;
           reject(err);
         });
 
-        socketTask.onClose((event) => {
-          console.log('WebSocket 连接关闭:', event, { clientId });
+        socketRef.onClose((event) => {
+          console.log('WebSocket 连接关闭:', event, { clientId: currentClientId });
           stopHeartbeat();
           socketTask = null;
           messageCallbacks = [];
@@ -110,11 +125,13 @@ export async function connect(clientId) {
         });
       });
     } catch (error) {
-      console.error('WebSocket 连接失败:', error, { clientId, retries });
+      console.error('WebSocket 连接失败:', error, { clientId: currentClientId, retries });
       lastError = error;
       retries--;
       if (retries > 0) {
-        console.log(`等待 ${RETRY_DELAY}ms 后重试...`);
+        // 生成新的clientId避免重复连接问题
+        currentClientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`等待 ${RETRY_DELAY}ms 后重试，使用新clientId: ${currentClientId}`);
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
       }
     }
@@ -184,9 +201,11 @@ export function sendMessage(data) {
 }
 
 export function onMessage(callback) {
-  if (!socketTask) {
-    console.warn('WebSocket 未初始化，无法注册回调', {
+  // 允许在连接过程中注册回调，不要求socketTask必须立即可用
+  if (!socketTask && !isConnecting) {
+    console.warn('WebSocket 未初始化且未在连接中，无法注册回调', {
       socketTask: !!socketTask,
+      isConnecting,
       readyState: socketTask?.readyState,
     });
     return () => {};
@@ -201,11 +220,12 @@ export function onMessage(callback) {
 }
 
 export function isConnected() {
-  // 添加额外的连接状态检查逻辑
+  // 更严格的连接状态检查
   const hasSocketTask = !!socketTask;
   const readyState = socketTask?.readyState;
-  const connected = hasSocketTask && (readyState === 1 || readyState === undefined);
-  console.log('检查 WebSocket 连接状态:', { connected, readyState, hasSocketTask });
+  // 如果正在连接中，也认为是"连接状态"
+  const connected = hasSocketTask && (readyState === 1 || (isConnecting && readyState === undefined));
+  console.log('检查 WebSocket 连接状态:', { connected, readyState, hasSocketTask, isConnecting });
   return connected;
 }
 
