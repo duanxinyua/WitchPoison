@@ -1,7 +1,5 @@
 
-// 后端服务配置 - 当前统一使用生产环境
-// 注释：环境判断逻辑已保留，如需切换可取消注释
-/*
+// 从环境变量获取配置信息
 function getEnvironmentConfig() {
   // 判断是否为开发环境
   const isDevelopment = process.env.NODE_ENV === 'development' || 
@@ -13,37 +11,33 @@ function getEnvironmentConfig() {
                         window.location.hostname.includes('172.'));
 
   if (isDevelopment) {
-    // 开发环境 - 使用本机IP地址
+    // 开发环境配置
     return {
-      backendUrl: 'http://192.168.10.200:3000',
-      wsUrl: 'ws://192.168.10.200:3000'
+      backendUrl: process.env.VUE_APP_DEV_API_BASE_URL || 'http://localhost:3000',
+      wsUrl: process.env.VUE_APP_DEV_WS_URL || 'ws://localhost:3000'
     };
   } else {
-    // 生产环境 - 使用线上地址
+    // 生产环境配置
     return {
-      backendUrl: 'https://dxywitch.linhaitec.com',
-      wsUrl: 'wss://dxywitch.linhaitec.com'
+      backendUrl: process.env.VUE_APP_API_BASE_URL || 'https://dxywitch.linhaitec.com',
+      wsUrl: process.env.VUE_APP_WS_URL || 'wss://dxywitch.linhaitec.com'
     };
   }
 }
 
 const config = getEnvironmentConfig();
-*/
-
-// 当前配置：统一使用生产环境地址
-const config = {
-  backendUrl: 'https://dxywitch.linhaitec.com',
-  wsUrl: 'wss://dxywitch.linhaitec.com'
-};
 
 // 输出当前环境配置到控制台，便于调试
 console.log('当前环境配置:', {
-  环境: '生产环境（统一配置）',
+  环境: process.env.NODE_ENV === 'development' ? '开发环境' : '生产环境',
   HTTP地址: config.backendUrl,
-  WebSocket地址: config.wsUrl
+  WebSocket地址: config.wsUrl,
+  应用版本: process.env.VUE_APP_VERSION
 });
 
 export default {
   backendUrl: config.backendUrl,
   wsUrl: config.wsUrl,
+  appName: process.env.VUE_APP_NAME || '女巫的毒药',
+  appVersion: process.env.VUE_APP_VERSION || '1.0.0'
 };

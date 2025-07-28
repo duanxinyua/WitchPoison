@@ -1,9 +1,17 @@
+// 加载环境变量
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
-const DEBUG = true;
+// 从环境变量获取配置
+const DEBUG = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+const MAX_PLAYERS_PER_ROOM = parseInt(process.env.MAX_PLAYERS_PER_ROOM) || 5;
+const DEFAULT_BOARD_SIZE = parseInt(process.env.DEFAULT_BOARD_SIZE) || 5;
 
 function debugLog(...args) {
   if (DEBUG) console.log(...args);
@@ -751,6 +759,9 @@ function handleClientDisconnect(clientId) {
 
 app.get('/health', (req, res) => res.send('OK'));
 
-server.listen(3000, () => {
-  debugLog('服务器运行在 http://localhost:3000');
+server.listen(PORT, HOST, () => {
+  debugLog(`${process.env.APP_NAME || '女巫的毒药后端'} v${process.env.APP_VERSION || '1.0.0'}`);
+  debugLog(`服务器运行在 http://${HOST}:${PORT}`);
+  debugLog(`环境: ${process.env.NODE_ENV || 'development'}`);
+  debugLog(`调试模式: ${DEBUG ? '开启' : '关闭'}`);
 });
