@@ -2,10 +2,12 @@
   "name": "poison-game-backend",
   "version": "1.0.0",
   "dependencies": {
-    "dotenv": "^17.2.1",
     "express": "^4.21.2",
     "uuid": "^11.1.0",
     "ws": "^8.18.2"
+  },
+  "optionalDependencies": {
+    "dotenv": "^17.2.1"
   },
   "scripts": {
     "start": "node index.js"

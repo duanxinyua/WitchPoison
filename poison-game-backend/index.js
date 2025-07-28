@@ -1,5 +1,9 @@
-// 加载环境变量
-require('dotenv').config();
+// 加载环境变量（如果dotenv可用）
+try {
+  require('dotenv').config();
+} catch (error) {
+  console.log('dotenv未安装，使用系统环境变量');
+}
 
 const express = require('express');
 const http = require('http');
