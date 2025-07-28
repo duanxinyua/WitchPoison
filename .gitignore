@@ -14,6 +14,7 @@ poison-game/.env
 # UniApp build artifacts
 poison-game/unpackage/
 poison-game/node_modules/
+poison-game/package-lock.json
 poison-game/.hbuilderx/
 
 # Logs

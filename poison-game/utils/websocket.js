@@ -25,14 +25,21 @@ export async function connect(clientId) {
   if (isConnecting) {
     console.log('WebSocket 连接正在进行中，等待完成', { clientId });
     return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 20; // 最多等待10秒
       const checkConnection = setInterval(() => {
+        attempts++;
         if (!isConnecting) {
           clearInterval(checkConnection);
-          if (socketTask && socketTask.readyState === 1) {
+          if (socketTask) {
             resolve();
           } else {
             reject(new Error('WebSocket 连接失败'));
           }
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkConnection);
+          isConnecting = false;
+          reject(new Error('等待连接超时'));
         }
       }, 500);
     });
@@ -78,9 +85,12 @@ export async function connect(clientId) {
           console.log('WebSocket onOpen 触发', { clientId, readyState: socketTask?.readyState });
           clearTimeout(timeout);
           isConnecting = false;
-          bindMessageHandler();
-          startHeartbeat(clientId);
-          resolve();
+          // 确保在 onOpen 后 readyState 正确设置
+          setTimeout(() => {
+            bindMessageHandler();
+            startHeartbeat(clientId);
+            resolve();
+          }, 100);
         });
 
         socketTask.onError((err) => {
@@ -116,7 +126,8 @@ export async function connect(clientId) {
 }
 
 function bindMessageHandler() {
-  if (socketTask && socketTask.readyState === 1 && !socketTask.onMessageBound) {
+  // 使用更宽松的连接状态检查
+  if (socketTask && !socketTask.onMessageBound) {
     socketTask.onMessage((res) => {
       try {
         const data = JSON.parse(res.data);
@@ -173,8 +184,8 @@ export function sendMessage(data) {
 }
 
 export function onMessage(callback) {
-  if (!socketTask || socketTask.readyState !== 1) {
-    console.warn('WebSocket 未初始化或未连接，无法注册回调', {
+  if (!socketTask) {
+    console.warn('WebSocket 未初始化，无法注册回调', {
       socketTask: !!socketTask,
       readyState: socketTask?.readyState,
     });
@@ -190,8 +201,11 @@ export function onMessage(callback) {
 }
 
 export function isConnected() {
-  const connected = socketTask && socketTask.readyState === 1;
-  console.log('检查 WebSocket 连接状态:', { connected, readyState: socketTask?.readyState });
+  // 添加额外的连接状态检查逻辑
+  const hasSocketTask = !!socketTask;
+  const readyState = socketTask?.readyState;
+  const connected = hasSocketTask && (readyState === 1 || readyState === undefined);
+  console.log('检查 WebSocket 连接状态:', { connected, readyState, hasSocketTask });
   return connected;
 }
 
