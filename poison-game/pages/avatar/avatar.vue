@@ -5,74 +5,97 @@
       <text class="subtitle">选择你喜欢的头像</text>
     </view>
     
-    <view class="avatar-grid">
-      <view 
-        v-for="(emoji, index) in avatarList" 
-        :key="index"
-        class="avatar-item"
-        :class="{ selected: selectedAvatar === emoji }"
-        @click="selectAvatar(emoji)"
-      >
-        <text class="emoji">{{ emoji }}</text>
+    <view class="avatar-container">
+      <view class="avatar-row" v-for="(row, rowIndex) in avatarRows" :key="rowIndex">
+        <view 
+          v-for="(emoji, colIndex) in row" 
+          :key="colIndex"
+          class="avatar-item"
+          :class="{ selected: selectedAvatar === emoji }"
+          @click="selectAvatar(emoji)"
+        >
+          <text class="emoji">{{ emoji }}</text>
+        </view>
       </view>
     </view>
     
-    <view class="actions">
-      <button class="confirm-btn" @click="confirmSelection" :disabled="!selectedAvatar">
-        确认选择
-      </button>
-    </view>
   </view>
 </template>
 
 <script>
+import { ref, computed } from 'vue'
+
 export default {
   name: 'AvatarPage',
-  data() {
-    return {
-      selectedAvatar: '',
-      avatarList: [
-        '😺', '🐶', '🐰', '🦅', '🐘', '🐸', '🦊', '🐯', '🐨', '🐼',
-        '🦁', '🐮', '🐷', '🐙', '🦋', '🐝', '🦄', '🐳', '🐬', '🐢',
-        '🌸', '🌺', '🌻', '🌷', '🌹', '🌼', '🌵', '🌲', '🌳', '🍀'
-      ]
-    };
-  },
-  onLoad() {
-    // 获取当前已选择的头像
-    const currentAvatar = uni.getStorageSync('userAvatar');
-    if (currentAvatar) {
-      this.selectedAvatar = currentAvatar;
-    }
-  },
-  methods: {
-    selectAvatar(emoji) {
-      this.selectedAvatar = emoji;
-    },
-    confirmSelection() {
-      if (!this.selectedAvatar) {
-        uni.showToast({
-          title: '请选择一个头像',
-          icon: 'none'
-        });
-        return;
+  setup() {
+    // 响应式数据
+    const selectedAvatar = ref('')
+    const avatarList = ref([
+      '😺', '🐶', '🐰', '🦅', '🐘', '🐸', '🦊', '🐯', '🐨', '🐼',
+      '🦁', '🐮', '🐷', '🐙', '🦋', '🐝', '🦄', '🐳', '🐬', '🐢',
+      '🌸', '🌺', '🌻', '🌷', '🌹', '🌼', '🌵', '🌲', '🌳', '🍀'
+    ])
+    
+    // 将头像列表分组为行，每行5个
+    const avatarRows = computed(() => {
+      const rows = []
+      for (let i = 0; i < avatarList.value.length; i += 5) {
+        rows.push(avatarList.value.slice(i, i + 5))
       }
+      return rows
+    })
+
+    // 方法
+    const selectAvatar = (emoji) => {
+      console.log('选择头像:', emoji)
+      selectedAvatar.value = emoji
       
-      // 保存选择的头像到本地存储
-      uni.setStorageSync('userAvatar', this.selectedAvatar);
-      
-      uni.showToast({
-        title: '头像设置成功',
-        icon: 'success'
-      });
-      
-      // 延迟返回上一页
-      setTimeout(() => {
+      // 保存选择的头像到临时存储，用于个性化弹窗预览
+      try {
+        uni.setStorageSync('tempSelectedAvatar', emoji)
+        console.log('临时头像保存成功:', emoji)
+        
+        uni.showToast({
+          title: '头像已选择',
+          icon: 'success',
+          duration: 1000
+        })
+        
+        // 直接返回上一页，不延迟
         uni.navigateBack({
           delta: 1
-        });
-      }, 1000);
+        })
+      } catch (error) {
+        console.error('保存头像失败:', error)
+        uni.showToast({
+          title: '保存失败，请重试',
+          icon: 'error'
+        })
+      }
     }
+
+
+    // 初始化方法
+    const initAvatar = () => {
+      // 获取当前已选择的头像
+      const currentAvatar = uni.getStorageSync('userAvatar')
+      if (currentAvatar) {
+        selectedAvatar.value = currentAvatar
+      }
+    }
+
+    // 返回模板需要的数据和方法
+    return {
+      selectedAvatar,
+      avatarList,
+      avatarRows,
+      selectAvatar,
+      initAvatar
+    }
+  },
+  onLoad() {
+    // 调用初始化方法
+    this.initAvatar()
   }
 };
 </script>
@@ -103,32 +126,34 @@ export default {
   display: block;
 }
 
-.avatar-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 20rpx;
+.avatar-container {
   margin-bottom: 60rpx;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.avatar-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  width: 100%;
 }
 
 .avatar-item {
   width: 120rpx;
   height: 120rpx;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10rpx);
   border-radius: 20rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 3rpx solid transparent;
-  transition: all 0.3s ease;
-  cursor: pointer;
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
 }
 
-.avatar-item:hover {
-  transform: translateY(-4rpx) scale(1.05);
-  box-shadow: 0 8rpx 25rpx rgba(0, 122, 255, 0.15);
-}
 
 .avatar-item.selected {
   border-color: #007aff;
@@ -139,69 +164,7 @@ export default {
 
 .emoji {
   font-size: 64rpx;
-  line-height: 1;
 }
 
-.actions {
-  text-align: center;
-  padding: 20rpx;
-}
 
-.confirm-btn {
-  background: linear-gradient(135deg, #007aff, #5856d6);
-  color: white;
-  border: none;
-  border-radius: 25rpx;
-  padding: 25rpx 80rpx;
-  font-size: 32rpx;
-  font-weight: 500;
-  box-shadow: 0 8rpx 20rpx rgba(0, 122, 255, 0.3);
-  transition: all 0.3s ease;
-  letter-spacing: 2rpx;
-}
-
-.confirm-btn:hover {
-  transform: translateY(-2rpx);
-  box-shadow: 0 12rpx 25rpx rgba(0, 122, 255, 0.4);
-}
-
-.confirm-btn:disabled {
-  background: linear-gradient(135deg, #c8c9ca, #a8a9aa);
-  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
-  transform: none;
-  opacity: 0.6;
-}
-
-/* 响应式设计 */
-@media screen and (max-width: 750rpx) {
-  .avatar-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 15rpx;
-  }
-  
-  .avatar-item {
-    width: 100rpx;
-    height: 100rpx;
-  }
-  
-  .emoji {
-    font-size: 50rpx;
-  }
-}
-
-@media screen and (min-width: 1200rpx) {
-  .avatar-grid {
-    grid-template-columns: repeat(6, 1fr);
-    gap: 25rpx;
-  }
-  
-  .avatar-item {
-    width: 140rpx;
-    height: 140rpx;
-  }
-  
-  .emoji {
-    font-size: 80rpx;
-  }
-}
 </style>

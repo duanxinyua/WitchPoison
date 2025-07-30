@@ -72,7 +72,7 @@
         <view class="form-item">
           <text class="form-label">头像</text>
           <view class="avatar-selector">
-            <text class="current-avatar">{{ userAvatar }}</text>
+            <text class="current-avatar">{{ tempAvatar || userAvatar }}</text>
             <button @click="goToAvatarPage" class="avatar-btn">选择头像</button>
           </view>
         </view>
@@ -88,524 +88,664 @@
   </view>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue';
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
 
-export default {
-  data() {
-    // 初始化默认昵称和头像，确保第一次使用时就保存到本地
-    let nickname = uni.getStorageSync('nickname');
-    let userAvatar = uni.getStorageSync('userAvatar');
-    let isFirstTime = false;
-    
-    // 检查是否手动设置过昵称
-    const manuallySet = uni.getStorageSync('manuallySetNickname') === 'true';
-    
-    // 如果没有昵称，生成默认昵称并保存
-    if (!nickname) {
-      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
-      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
-      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-      const randomNum = Math.floor(Math.random() * 999) + 1;
-      nickname = `${randomAdj}${randomNoun}${randomNum}`;
-      uni.setStorageSync('nickname', nickname);
-      isFirstTime = true;
-    }
-    
-    // 如果没有头像，设置默认头像并保存
-    if (!userAvatar) {
-      userAvatar = '😺';
-      uni.setStorageSync('userAvatar', userAvatar);
-      isFirstTime = true;
-    }
-    
-    return {
-      nickname: nickname,
-      nicknameSaved: manuallySet, // 根据是否手动设置过来标记
-      userAvatar: userAvatar,
-      showCreateRoomModal: false,
-      showJoinRoomModal: false,
-      showNicknameModal: false,
-      roomId: '',
-      boardSize: 5,
-      playerCount: 2,
-      isCreating: false,
-      clientId: '',
-      removeMessageCallback: null,
-      createTimeout: null,
-      hasNavigated: false,
-      tempNickname: '', // 临时昵称输入
-      isFirstTime: isFirstTime, // 标记是否首次使用
-    };
-  },
-  methods: {
-    generateGuestNickname() {
-      const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
-      const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
-      const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-      const randomNum = Math.floor(Math.random() * 999) + 1;
-      return `${randomAdj}${randomNoun}${randomNum}`;
-    },
-    openNicknameModal() {
-      this.$set(this, 'tempNickname', this.nickname);
-      this.$set(this, 'showNicknameModal', true);
-    },
-    closeNicknameModal() {
-      this.$set(this, 'showNicknameModal', false);
-      this.$set(this, 'tempNickname', '');
-    },
-    saveCustomization() {
-      if (!this.tempNickname.trim()) {
-        uni.showToast({ title: '请输入昵称', icon: 'error' });
-        return;
-      }
-      
-      // 保存昵称和头像
-      uni.setStorageSync('nickname', this.tempNickname.trim());
-      uni.setStorageSync('userAvatar', this.userAvatar); // 确保头像也被保存
-      uni.setStorageSync('manuallySetNickname', 'true'); // 标记为手动设置
-      this.$set(this, 'nickname', this.tempNickname.trim());
-      this.$set(this, 'nicknameSaved', true);
-      this.$set(this, 'isFirstTime', false);
-      
-      // 关闭模态框
-      this.closeNicknameModal();
-      uni.showToast({ title: '个性化设置已保存', icon: 'success' });
-      
-      // 初始化WebSocket连接
-      if (!this.clientId) {
-        this.initWebSocket();
-      }
-    },
-    saveNickname() {
-      if (!this.nickname.trim()) {
-        uni.showToast({ title: '请输入昵称', icon: 'error' });
-        return;
-      }
-      uni.setStorageSync('nickname', this.nickname.trim());
-      this.nicknameSaved = true;
-      
-      // 检查是否已选择头像，如果没有则提示选择
-      if (!this.userAvatar || this.userAvatar === '😺') {
-        uni.showModal({
-          title: '选择头像',
-          content: '请选择一个头像作为你的游戏形象',
-          confirmText: '去选择',
-          cancelText: '使用默认',
-          success: (res) => {
-            if (res.confirm) {
-              this.goToAvatarPage();
-            } else {
-              uni.setStorageSync('userAvatar', '😺');
-              this.userAvatar = '😺';
-              this.initWebSocket();
-            }
-          }
-        });
-      } else {
-        this.initWebSocket();
-      }
-    },
-    goToAvatarPage() {
-      console.log('跳转到头像页面');
-      uni.navigateTo({
-        url: '/pages/avatar/avatar',
-        success: () => {
-          console.log('跳转头像页面成功');
-        },
-        fail: (err) => {
-          console.error('跳转头像页面失败:', err);
-          uni.showToast({ title: '跳转失败，请重试', icon: 'error' });
-        }
-      });
-    },
-    editNickname() {
-      this.nicknameSaved = false;
-      this.nickname = '';
-      uni.removeStorageSync('nickname');
-    },
-    openCreateRoomModal() {
-      console.log('打开创建房间模态框');
-      this.$set(this, 'showCreateRoomModal', true);
-      this.$set(this, 'showJoinRoomModal', false);
-    },
-    openJoinRoomModal() {
-      console.log('打开加入房间模态框');
-      this.$set(this, 'roomId', '');
-      this.$set(this, 'showJoinRoomModal', true);
-      this.$set(this, 'showCreateRoomModal', false);
-    },
-    closeJoinRoomModal() {
-      this.$set(this, 'showJoinRoomModal', false);
-      this.$set(this, 'roomId', '');
-    },
-    updateBoardSize(delta) {
-      const newSize = Math.max(5, Math.min(10, this.boardSize + delta));
-      this.$set(this, 'boardSize', newSize);
-      console.log('更新棋盘尺寸:', newSize);
-    },
-    updatePlayerCount(delta) {
-      const newCount = Math.max(2, Math.min(5, this.playerCount + delta));
-      this.$set(this, 'playerCount', newCount);
-      console.log('更新玩家人数:', newCount);
-    },
-    async initWebSocket() {
-      // 移除昵称检查，支持游客模式
-      console.log('初始化 WebSocket 连接，当前昵称:', this.nickname);
-      this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      uni.setStorageSync('clientId', this.clientId);
-      console.log('初始化 clientId:', this.clientId);
-      try {
-        await connect(this.clientId);
-        console.log('WebSocket 连接成功，准备注册消息回调');
-        this.registerMessageHandler();
-      } catch (error) {
-        console.error('WebSocket 初始化失败:', error);
-        uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
-        uni.hideLoading();
-      }
-    },
-    async createRoom() {
-      console.log('开始创建房间，当前状态:', {
-        isCreating: this.isCreating,
-        boardSize: this.boardSize,
-        playerCount: this.playerCount,
-        clientId: this.clientId
-      });
-      
-      if (this.isCreating) {
-        console.log('房间正在创建中，忽略重复请求');
-        return;
-      }
-      
-      if (!this.clientId) {
-        console.error('clientId 缺失，尝试重新初始化');
-        await this.initWebSocket();
-        if (!this.clientId || !isConnected()) {
-          uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
-          uni.hideLoading();
-          return;
-        }
-      }
-      
-      // 验证参数
-      const boardSize = Number(this.boardSize) || 5;
-      const playerCount = Number(this.playerCount) || 2;
-      
-      if (boardSize < 5 || boardSize > 10) {
-        uni.showToast({ title: '棋盘尺寸应为 5-10', icon: 'error' });
-        return;
-      }
-      if (playerCount < 2 || playerCount > 5) {
-        uni.showToast({ title: '玩家人数应为 2-5', icon: 'error' });
-        return;
-      }
-      
-      this.$set(this, 'isCreating', true);
-      uni.showLoading({ title: '创建房间中...', mask: true });
+// 初始化默认昵称和头像，确保第一次使用时就保存到本地
+let storedNickname = uni.getStorageSync('nickname');
+let storedUserAvatar = uni.getStorageSync('userAvatar');
+let storedIsFirstTime = false;
 
-      if (!isConnected()) {
-        console.log('WebSocket 未连接，尝试重新连接');
-        try {
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
-          if (this.removeMessageCallback) {
-            this.removeMessageCallback();
-          }
-          this.registerMessageHandler();
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        } catch (error) {
-          console.error('WebSocket 重新连接失败:', error);
-          uni.hideLoading();
-          uni.showToast({ title: '无法连接服务器，请重试', icon: 'error' });
-          this.isCreating = false;
-          this.showCreateRoomModal = false;
-          return;
-        }
-      }
+// 检查是否手动设置过昵称
+const manuallySet = uni.getStorageSync('manuallySetNickname') === 'true';
 
-      this.createTimeout = setTimeout(() => {
-        if (this.isCreating) {
-          console.error('创建房间超时，未收到 gameCreated 响应');
-          uni.hideLoading();
-          uni.showToast({ title: '创建房间超时，请重试', icon: 'error' });
-          this.isCreating = false;
-          this.showCreateRoomModal = false;
-        }
-        this.createTimeout = null;
-      }, 10000);
+// 如果没有昵称，生成默认昵称并保存
+if (!storedNickname) {
+  const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
+  const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
+  const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  const randomNum = Math.floor(Math.random() * 999) + 1;
+  storedNickname = `${randomAdj}${randomNoun}${randomNum}`;
+  uni.setStorageSync('nickname', storedNickname);
+  storedIsFirstTime = true;
+}
 
-      try {
-        const createData = {
-          action: 'create',
-          boardSize: boardSize,
-          playerCount: playerCount,
-          name: this.nickname,
-          clientId: this.clientId,
-        };
-        console.log('准备发送创建房间请求:', createData);
-        const sent = sendMessage(createData);
-        if (!sent) {
-          console.error('发送创建房间消息失败');
-          throw new Error('发送创建房间消息失败');
-        }
-        console.log('发送创建房间请求:', createData);
-      } catch (error) {
-        console.error('创建房间失败:', error);
-        if (this.createTimeout) {
-          clearTimeout(this.createTimeout);
-          this.createTimeout = null;
-        }
-        uni.hideLoading();
-        uni.showToast({ title: '创建房间失败，请重试', icon: 'error' });
-        this.$set(this, 'isCreating', false);
-        this.$set(this, 'showCreateRoomModal', false);
-      }
-    },
-    async joinRoom() {
-      if (this.hasNavigated) return;
-      if (!this.roomId.trim()) {
-        uni.showToast({ title: '请输入房间 ID', icon: 'error' });
-        return;
-      }
-      if (!this.clientId) {
-        console.error('clientId 缺失，尝试重新初始化');
-        await this.initWebSocket();
-        if (!this.clientId || !isConnected()) {
-          uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
-          uni.hideLoading();
-          return;
-        }
-      }
-      this.hasNavigated = true;
-      uni.showLoading({ title: '加入房间中...', mask: true });
-      try {
-        if (!isConnected()) {
-          console.log('WebSocket 未连接，尝试重新连接');
-          this.clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          uni.setStorageSync('clientId', this.clientId);
-          console.log('生成新 clientId:', this.clientId);
-          await connect(this.clientId);
-          console.log('WebSocket 重新连接成功，注册消息回调');
-          if (this.removeMessageCallback) {
-            this.removeMessageCallback();
-          }
-          this.registerMessageHandler();
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
-        const joinData = {
-          action: 'join',
-          roomId: this.roomId,
-          name: this.nickname,
-          clientId: this.clientId,
-        };
-        const sent = sendMessage(joinData);
-        if (!sent) {
-          console.error('发送加入房间消息失败');
-          throw new Error('发送加入房间消息失败');
-        }
-        console.log('发送加入房间请求:', joinData);
-      } catch (error) {
-        console.error('加入房间错误:', error);
-        uni.hideLoading();
-        uni.showToast({ title: '加入房间失败，请重试', icon: 'error' });
-        this.showJoinRoomModal = false;
-        this.hasNavigated = false;
-      }
-    },
-    registerMessageHandler() {
-      if (this.removeMessageCallback) {
-        this.removeMessageCallback();
-        console.log('移除旧消息回调');
-      }
-      this.removeMessageCallback = onMessage((data) => {
-        console.log('首页收到消息:', data);
-        try {
-          if (!data || !data.type) {
-            console.error('无效消息:', data);
-            uni.showToast({ title: '无效消息', icon: 'error' });
-            if (this.isCreating) {
-              clearTimeout(this.createTimeout);
-              this.createTimeout = null;
-              uni.hideLoading();
-              this.isCreating = false;
-            }
-            return;
-          }
-          if (data.type === 'connected') {
-            console.log('WebSocket 连接确认:', data);
-          } else if (data.type === 'pong') {
-            console.log('收到心跳响应:', data);
-          } else if (data.type === 'gameCreated') {
-            console.log('处理 gameCreated:', { roomId: data.roomId });
-            if (this.createTimeout) {
-              clearTimeout(this.createTimeout);
-              this.createTimeout = null;
-            }
-            this.$set(this, 'roomId', data.roomId);
-            this.$set(this, 'showCreateRoomModal', false);
-            if (this.isCreating) {
-              uni.hideLoading();
-              this.$set(this, 'isCreating', false);
-            }
-            uni.showToast({ title: '房间创建成功', icon: 'success' });
-            const gameState = encodeURIComponent(JSON.stringify(data));
-            const targetUrl = `/pages/game/game?roomId=${encodeURIComponent(this.roomId)}&gameState=${gameState}&clientId=${encodeURIComponent(this.clientId)}&create=true`;
-            console.log('准备跳转到:', targetUrl);
-            uni.navigateTo({
-              url: targetUrl,
-              success: () => {
-                console.log('导航成功');
-                this.hasNavigated = true; // 仅在导航成功时设置
-              },
-              fail: (err) => {
-                console.error('导航失败:', err);
-                uni.showToast({ title: '跳转失败', icon: 'error' });
-                uni.hideLoading();
-                this.isCreating = false;
-                this.hasNavigated = false;
-              },
-            });
-          } else if (data.type === 'playerJoined') {
-            console.log('处理 playerJoined:', { roomId: data.state?.roomId });
-            const roomId = this.roomId || data.state?.roomId;
-            if (!roomId) {
-              console.error('playerJoined 缺少 roomId:', data);
-              uni.showToast({ title: '房间 ID 无效', icon: 'error' });
-              uni.hideLoading();
-              return;
-            }
-            if (data.state?.roomId === this.roomId && data.state?.players?.some(p => p.id === this.clientId)) {
-              this.showJoinRoomModal = false;
-              uni.hideLoading();
-              uni.showToast({ title: '加入房间成功', icon: 'success' });
-              const gameState = encodeURIComponent(JSON.stringify(data));
-              const targetUrl = `/pages/game/game?roomId=${encodeURIComponent(roomId)}&gameState=${gameState}&clientId=${encodeURIComponent(this.clientId)}`;
-              console.log('准备跳转到:', targetUrl);
-              uni.navigateTo({
-                url: targetUrl,
-                success: () => {
-                  console.log('导航成功');
-                  this.hasNavigated = true; // 仅在导航成功时设置
-                },
-                fail: (err) => {
-                  console.error('导航失败:', err);
-                  uni.showToast({ title: '跳转失败', icon: 'error' });
-                  uni.hideLoading();
-                  this.hasNavigated = false;
-                },
-              });
-            } else {
-              console.log('忽略无关或重复的 playerJoined 消息:', data);
-              uni.hideLoading();
-            }
-          } else if (data.type === 'error') {
-            console.error('后端错误:', data.message);
-            uni.showToast({ title: data.message || '未知错误', icon: 'error' });
-            if (this.isCreating) {
-              if (this.createTimeout) {
-                clearTimeout(this.createTimeout);
-                this.createTimeout = null;
-              }
-              uni.hideLoading();
-              this.$set(this, 'isCreating', false);
-              this.$set(this, 'showCreateRoomModal', false);
-            }
-            this.$set(this, 'showJoinRoomModal', false);
-            this.$set(this, 'hasNavigated', false);
-            if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
-              console.warn('clientId 无效，重新初始化 WebSocket');
-              closeWebSocket();
-              uni.removeStorageSync('clientId');
-              this.clientId = '';
-              this.initWebSocket();
-            }
-          } else if (data.type === 'leftRoom') {
-            console.log('收到 leftRoom 确认:', data);
-            this.roomId = '';
-            this.isCreating = false;
-            this.hasNavigated = false;
-            uni.removeStorageSync('clientId');
-            this.clientId = '';
-            uni.hideLoading();
-          } else {
-            console.warn('忽略游戏相关消息:', data.type);
-            uni.hideLoading();
-          }
-        } catch (error) {
-          console.error('处理消息失败:', error);
-          uni.showToast({ title: '消息处理失败', icon: 'error' });
-          if (this.isCreating) {
-            clearTimeout(this.createTimeout);
-            this.createTimeout = null;
-            uni.hideLoading();
-            this.isCreating = false;
-            this.showCreateRoomModal = false;
-          }
-          this.showJoinRoomModal = false;
-          this.hasNavigated = false;
-        }
-      });
-      console.log('注册新消息回调');
-    },
-  },
-  onLoad() {
-    console.log('首页加载');
-    uni.removeStorageSync('clientId');
-    this.clientId = '';
-    
-    // 如果是第一次使用，显示欢迎提示
-    if (this.isFirstTime) {
-      console.log('首次使用，已自动设置默认昵称和头像:', { nickname: this.nickname, avatar: this.userAvatar });
-      setTimeout(() => {
-        uni.showToast({ 
-          title: '欢迎体验游戏！已为您设置默认信息', 
-          icon: 'success',
-          duration: 3000
-        });
-      }, 500);
-    } else {
-      console.log('用户信息已存在:', { nickname: this.nickname, avatar: this.userAvatar, nicknameSaved: this.nicknameSaved });
-    }
-    
-    // 直接初始化WebSocket连接，无论是否设置了昵称
-    this.initWebSocket();
-  },
-  onShow() {
-    // 页面显示时更新头像（可能在头像选择页面更改了）
-    const storedAvatar = uni.getStorageSync('userAvatar');
-    if (storedAvatar && storedAvatar !== this.userAvatar) {
-      this.$set(this, 'userAvatar', storedAvatar);
-    }
-  },
-  onUnload() {
-    console.log('首页卸载');
-    if (this.removeMessageCallback) {
-      this.removeMessageCallback();
-      console.log('清理消息回调');
-    }
-    if (this.createTimeout) {
-      clearTimeout(this.createTimeout);
-      console.log('清理超时计时器');
-    }
-    if (isConnected() && this.clientId && this.roomId) {
-      sendMessage({ action: 'leaveRoom', clientId: this.clientId, roomId: this.roomId });
-    }
-    closeWebSocket();
-    uni.removeStorageSync('clientId');
-    this.clientId = '';
-    this.hasNavigated = false;
-    console.log('清理 clientId');
-  },
-  onReady() {
-    console.log('首页已准备');
-  },
+// 如果没有头像，设置默认头像并保存
+if (!storedUserAvatar) {
+  storedUserAvatar = '😺';
+  uni.setStorageSync('userAvatar', storedUserAvatar);
+  storedIsFirstTime = true;
+}
+
+// 响应式数据
+const nickname = ref(storedNickname);
+const nicknameSaved = ref(manuallySet); // 根据是否手动设置过来标记
+const userAvatar = ref(storedUserAvatar);
+const showCreateRoomModal = ref(false);
+const showJoinRoomModal = ref(false);
+const showNicknameModal = ref(false);
+const roomId = ref('');
+const boardSize = ref(5);
+const playerCount = ref(2);
+const isCreating = ref(false);
+const clientId = ref('');
+const removeMessageCallback = ref(null);
+const createTimeout = ref(null);
+const hasNavigated = ref(false);
+const tempNickname = ref(''); // 临时昵称输入
+const tempAvatar = ref(''); // 临时头像选择
+const isFirstTime = ref(storedIsFirstTime); // 标记是否首次使用
+const avatarCheckInterval = ref(null); // 头像检查定时器
+
+// 方法
+const generateGuestNickname = () => {
+  const adjectives = ['勇敢的', '聪明的', '幸运的', '神秘的', '敏捷的', '睿智的', '快乐的', '冷静的'];
+  const nouns = ['探险者', '法师', '勇士', '游侠', '智者', '旅行者', '猎人', '学者'];
+  const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  const randomNum = Math.floor(Math.random() * 999) + 1;
+  return `${randomAdj}${randomNoun}${randomNum}`;
 };
+
+const startAvatarCheck = () => {
+  // 清除之前的定时器
+  if (avatarCheckInterval.value) {
+    clearInterval(avatarCheckInterval.value);
+  }
+  
+  // 启动定时器检查临时头像
+  avatarCheckInterval.value = setInterval(() => {
+    const tempSelectedAvatar = uni.getStorageSync('tempSelectedAvatar');
+    if (tempSelectedAvatar && tempSelectedAvatar !== tempAvatar.value) {
+      console.log('定时器检查到新的临时头像:', tempSelectedAvatar);
+      tempAvatar.value = tempSelectedAvatar;
+      // 清除临时存储
+      uni.removeStorageSync('tempSelectedAvatar');
+      // 清除定时器
+      clearInterval(avatarCheckInterval.value);
+      avatarCheckInterval.value = null;
+    }
+  }, 200);
+};
+
+const openNicknameModal = () => {
+  tempNickname.value = nickname.value;
+  tempAvatar.value = ''; // 重置临时头像，显示当前头像
+  
+  console.log('打开个性化弹窗，当前头像:', userAvatar.value);
+  showNicknameModal.value = true;
+  
+  // 标记弹窗状态，供 onShow 使用
+  uni.setStorageSync('isNicknameModalOpen', 'true');
+  
+  // 启动头像检查定时器
+  startAvatarCheck();
+};
+
+const closeNicknameModal = () => {
+  showNicknameModal.value = false;
+  tempNickname.value = '';
+  tempAvatar.value = ''; // 清理临时头像
+  
+  // 清除弹窗状态标记
+  uni.removeStorageSync('isNicknameModalOpen');
+  
+  // 清除头像检查定时器
+  if (avatarCheckInterval.value) {
+    clearInterval(avatarCheckInterval.value);
+    avatarCheckInterval.value = null;
+  }
+};
+
+const saveCustomization = () => {
+  if (!tempNickname.value.trim()) {
+    uni.showToast({ title: '请输入昵称', icon: 'error' });
+    return;
+  }
+  
+  // 保存昵称
+  uni.setStorageSync('nickname', tempNickname.value.trim());
+  
+  // 如果用户选择了新头像，才保存和更新
+  if (tempAvatar.value) {
+    console.log('保存新选择的头像:', tempAvatar.value);
+    uni.setStorageSync('userAvatar', tempAvatar.value);
+    userAvatar.value = tempAvatar.value;
+  }
+  
+  console.log('保存个性化设置 - 昵称:', tempNickname.value.trim(), '头像:', tempAvatar.value || '未修改');
+  uni.setStorageSync('manuallySetNickname', 'true'); // 标记为手动设置
+  nickname.value = tempNickname.value.trim();
+  nicknameSaved.value = true;
+  isFirstTime.value = false;
+  
+  // 关闭模态框
+  closeNicknameModal();
+  uni.showToast({ title: '个性化设置已保存', icon: 'success' });
+  
+  // 初始化WebSocket连接
+  if (!clientId.value) {
+    initWebSocket();
+  }
+};
+
+const saveNickname = () => {
+  if (!nickname.value.trim()) {
+    uni.showToast({ title: '请输入昵称', icon: 'error' });
+    return;
+  }
+  uni.setStorageSync('nickname', nickname.value.trim());
+  nicknameSaved.value = true;
+  
+  // 检查是否已选择头像，如果没有则提示选择
+  if (!userAvatar.value || userAvatar.value === '😺') {
+    uni.showModal({
+      title: '选择头像',
+      content: '请选择一个头像作为你的游戏形象',
+      confirmText: '去选择',
+      cancelText: '使用默认',
+      success: (res) => {
+        if (res.confirm) {
+          goToAvatarPage();
+        } else {
+          uni.setStorageSync('userAvatar', '😺');
+          userAvatar.value = '😺';
+          initWebSocket();
+        }
+      }
+    });
+  } else {
+    initWebSocket();
+  }
+};
+
+const goToAvatarPage = () => {
+  console.log('跳转到头像页面');
+  uni.navigateTo({
+    url: '/pages/avatar/avatar',
+    success: () => {
+      console.log('跳转头像页面成功');
+    },
+    fail: (err) => {
+      console.error('跳转头像页面失败:', err);
+      uni.showToast({ title: '跳转失败，请重试', icon: 'error' });
+    }
+  });
+};
+
+const editNickname = () => {
+  nicknameSaved.value = false;
+  nickname.value = '';
+  uni.removeStorageSync('nickname');
+};
+
+const openCreateRoomModal = () => {
+  console.log('打开创建房间模态框');
+  showCreateRoomModal.value = true;
+  showJoinRoomModal.value = false;
+};
+
+const openJoinRoomModal = () => {
+  console.log('打开加入房间模态框');
+  roomId.value = '';
+  showJoinRoomModal.value = true;
+  showCreateRoomModal.value = false;
+};
+
+const closeJoinRoomModal = () => {
+  showJoinRoomModal.value = false;
+  roomId.value = '';
+};
+
+const updateBoardSize = (delta) => {
+  const newSize = Math.max(5, Math.min(10, boardSize.value + delta));
+  boardSize.value = newSize;
+  console.log('更新棋盘尺寸:', newSize);
+};
+
+const updatePlayerCount = (delta) => {
+  const newCount = Math.max(2, Math.min(5, playerCount.value + delta));
+  playerCount.value = newCount;
+  console.log('更新玩家人数:', newCount);
+};
+
+const initWebSocket = async () => {
+  // 移除昵称检查，支持游客模式
+  console.log('初始化 WebSocket 连接，当前昵称:', nickname.value);
+  clientId.value = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  uni.setStorageSync('clientId', clientId.value);
+  console.log('初始化 clientId:', clientId.value);
+  try {
+    await connect(clientId.value);
+    console.log('WebSocket 连接成功，准备注册消息回调');
+    registerMessageHandler();
+  } catch (error) {
+    console.error('WebSocket 初始化失败:', error);
+    uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
+    uni.hideLoading();
+  }
+};
+
+const createRoom = async () => {
+  console.log('开始创建房间，当前状态:', {
+    isCreating: isCreating.value,
+    boardSize: boardSize.value,
+    playerCount: playerCount.value,
+    clientId: clientId.value
+  });
+  
+  if (isCreating.value) {
+    console.log('房间正在创建中，忽略重复请求');
+    return;
+  }
+  
+  if (!clientId.value) {
+    console.error('clientId 缺失，尝试重新初始化');
+    await initWebSocket();
+    if (!clientId.value || !isConnected()) {
+      uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
+      uni.hideLoading();
+      return;
+    }
+  }
+  
+  // 验证参数
+  const currentBoardSize = Number(boardSize.value) || 5;
+  const currentPlayerCount = Number(playerCount.value) || 2;
+  
+  if (currentBoardSize < 5 || currentBoardSize > 10) {
+    uni.showToast({ title: '棋盘尺寸应为 5-10', icon: 'error' });
+    return;
+  }
+  if (currentPlayerCount < 2 || currentPlayerCount > 5) {
+    uni.showToast({ title: '玩家人数应为 2-5', icon: 'error' });
+    return;
+  }
+  
+  isCreating.value = true;
+  uni.showLoading({ title: '创建房间中...', mask: true });
+
+  if (!isConnected()) {
+    console.log('WebSocket 未连接，尝试重新连接');
+    try {
+      clientId.value = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      uni.setStorageSync('clientId', clientId.value);
+      console.log('生成新 clientId:', clientId.value);
+      await connect(clientId.value);
+      console.log('WebSocket 重新连接成功，注册消息回调');
+      if (removeMessageCallback.value) {
+        removeMessageCallback.value();
+      }
+      registerMessageHandler();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.error('WebSocket 重新连接失败:', error);
+      uni.hideLoading();
+      uni.showToast({ title: '无法连接服务器，请重试', icon: 'error' });
+      isCreating.value = false;
+      showCreateRoomModal.value = false;
+      return;
+    }
+  }
+
+  createTimeout.value = setTimeout(() => {
+    if (isCreating.value) {
+      console.error('创建房间超时，未收到 gameCreated 响应');
+      uni.hideLoading();
+      uni.showToast({ title: '创建房间超时，请重试', icon: 'error' });
+      isCreating.value = false;
+      showCreateRoomModal.value = false;
+    }
+    createTimeout.value = null;
+  }, 10000);
+
+  try {
+    const createData = {
+      action: 'create',
+      boardSize: currentBoardSize,
+      playerCount: currentPlayerCount,
+      name: nickname.value,
+      clientId: clientId.value,
+    };
+    console.log('准备发送创建房间请求:', createData);
+    const sent = sendMessage(createData);
+    if (!sent) {
+      console.error('发送创建房间消息失败');
+      throw new Error('发送创建房间消息失败');
+    }
+    console.log('发送创建房间请求:', createData);
+  } catch (error) {
+    console.error('创建房间失败:', error);
+    if (createTimeout.value) {
+      clearTimeout(createTimeout.value);
+      createTimeout.value = null;
+    }
+    uni.hideLoading();
+    uni.showToast({ title: '创建房间失败，请重试', icon: 'error' });
+    isCreating.value = false;
+    showCreateRoomModal.value = false;
+  }
+};
+
+const joinRoom = async () => {
+  if (hasNavigated.value) return;
+  if (!roomId.value.trim()) {
+    uni.showToast({ title: '请输入房间 ID', icon: 'error' });
+    return;
+  }
+  if (!clientId.value) {
+    console.error('clientId 缺失，尝试重新初始化');
+    await initWebSocket();
+    if (!clientId.value || !isConnected()) {
+      uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
+      uni.hideLoading();
+      return;
+    }
+  }
+  hasNavigated.value = true;
+  uni.showLoading({ title: '加入房间中...', mask: true });
+  try {
+    if (!isConnected()) {
+      console.log('WebSocket 未连接，尝试重新连接');
+      clientId.value = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      uni.setStorageSync('clientId', clientId.value);
+      console.log('生成新 clientId:', clientId.value);
+      await connect(clientId.value);
+      console.log('WebSocket 重新连接成功，注册消息回调');
+      if (removeMessageCallback.value) {
+        removeMessageCallback.value();
+      }
+      registerMessageHandler();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    const joinData = {
+      action: 'join',
+      roomId: roomId.value,
+      name: nickname.value,
+      clientId: clientId.value,
+    };
+    const sent = sendMessage(joinData);
+    if (!sent) {
+      console.error('发送加入房间消息失败');
+      throw new Error('发送加入房间消息失败');
+    }
+    console.log('发送加入房间请求:', joinData);
+  } catch (error) {
+    console.error('加入房间错误:', error);
+    uni.hideLoading();
+    uni.showToast({ title: '加入房间失败，请重试', icon: 'error' });
+    showJoinRoomModal.value = false;
+    hasNavigated.value = false;
+  }
+};
+
+const registerMessageHandler = () => {
+  if (removeMessageCallback.value) {
+    removeMessageCallback.value();
+    console.log('移除旧消息回调');
+  }
+  removeMessageCallback.value = onMessage((data) => {
+    console.log('首页收到消息:', data);
+    try {
+      if (!data || !data.type) {
+        console.error('无效消息:', data);
+        uni.showToast({ title: '无效消息', icon: 'error' });
+        if (isCreating.value) {
+          clearTimeout(createTimeout.value);
+          createTimeout.value = null;
+          uni.hideLoading();
+          isCreating.value = false;
+        }
+        return;
+      }
+      if (data.type === 'connected') {
+        console.log('WebSocket 连接确认:', data);
+      } else if (data.type === 'pong') {
+        console.log('收到心跳响应:', data);
+      } else if (data.type === 'gameCreated') {
+        console.log('处理 gameCreated:', { roomId: data.roomId });
+        if (createTimeout.value) {
+          clearTimeout(createTimeout.value);
+          createTimeout.value = null;
+        }
+        roomId.value = data.roomId;
+        showCreateRoomModal.value = false;
+        if (isCreating.value) {
+          uni.hideLoading();
+          isCreating.value = false;
+        }
+        uni.showToast({ title: '房间创建成功', icon: 'success' });
+        const gameState = encodeURIComponent(JSON.stringify(data));
+        const targetUrl = `/pages/game/game?roomId=${encodeURIComponent(roomId.value)}&gameState=${gameState}&clientId=${encodeURIComponent(clientId.value)}&create=true`;
+        console.log('准备跳转到:', targetUrl);
+        uni.navigateTo({
+          url: targetUrl,
+          success: () => {
+            console.log('导航成功');
+            hasNavigated.value = true; // 仅在导航成功时设置
+          },
+          fail: (err) => {
+            console.error('导航失败:', err);
+            uni.showToast({ title: '跳转失败', icon: 'error' });
+            uni.hideLoading();
+            isCreating.value = false;
+            hasNavigated.value = false;
+          },
+        });
+      } else if (data.type === 'playerJoined') {
+        console.log('处理 playerJoined:', { roomId: data.state?.roomId });
+        const currentRoomId = roomId.value || data.state?.roomId;
+        if (!currentRoomId) {
+          console.error('playerJoined 缺少 roomId:', data);
+          uni.showToast({ title: '房间 ID 无效', icon: 'error' });
+          uni.hideLoading();
+          return;
+        }
+        if (data.state?.roomId === roomId.value && data.state?.players?.some(p => p.id === clientId.value)) {
+          showJoinRoomModal.value = false;
+          uni.hideLoading();
+          uni.showToast({ title: '加入房间成功', icon: 'success' });
+          const gameState = encodeURIComponent(JSON.stringify(data));
+          const targetUrl = `/pages/game/game?roomId=${encodeURIComponent(currentRoomId)}&gameState=${gameState}&clientId=${encodeURIComponent(clientId.value)}`;
+          console.log('准备跳转到:', targetUrl);
+          uni.navigateTo({
+            url: targetUrl,
+            success: () => {
+              console.log('导航成功');
+              hasNavigated.value = true; // 仅在导航成功时设置
+            },
+            fail: (err) => {
+              console.error('导航失败:', err);
+              uni.showToast({ title: '跳转失败', icon: 'error' });
+              uni.hideLoading();
+              hasNavigated.value = false;
+            },
+          });
+        } else {
+          console.log('忽略无关或重复的 playerJoined 消息:', data);
+          uni.hideLoading();
+        }
+      } else if (data.type === 'error') {
+        console.error('后端错误:', data.message);
+        uni.showToast({ title: data.message || '未知错误', icon: 'error' });
+        if (isCreating.value) {
+          if (createTimeout.value) {
+            clearTimeout(createTimeout.value);
+            createTimeout.value = null;
+          }
+          uni.hideLoading();
+          isCreating.value = false;
+          showCreateRoomModal.value = false;
+        }
+        showJoinRoomModal.value = false;
+        hasNavigated.value = false;
+        if (data.message === 'clientId 不匹配' || data.message === '玩家已在房间中') {
+          console.warn('clientId 无效，重新初始化 WebSocket');
+          closeWebSocket();
+          uni.removeStorageSync('clientId');
+          clientId.value = '';
+          initWebSocket();
+        }
+      } else if (data.type === 'leftRoom') {
+        console.log('收到 leftRoom 确认:', data);
+        roomId.value = '';
+        isCreating.value = false;
+        hasNavigated.value = false;
+        uni.removeStorageSync('clientId');
+        clientId.value = '';
+        uni.hideLoading();
+      } else {
+        console.warn('忽略游戏相关消息:', data.type);
+        uni.hideLoading();
+      }
+    } catch (error) {
+      console.error('处理消息失败:', error);
+      uni.showToast({ title: '消息处理失败', icon: 'error' });
+      if (isCreating.value) {
+        clearTimeout(createTimeout.value);
+        createTimeout.value = null;
+        uni.hideLoading();
+        isCreating.value = false;
+        showCreateRoomModal.value = false;
+      }
+      showJoinRoomModal.value = false;
+      hasNavigated.value = false;
+    }
+  });
+  console.log('注册新消息回调');
+};
+
+// UniApp 生命周期钩子
+const onLoad = () => {
+  console.log('首页加载');
+  uni.removeStorageSync('clientId');
+  clientId.value = '';
+  
+  // 如果是第一次使用，显示欢迎提示
+  if (isFirstTime.value) {
+    console.log('首次使用，已自动设置默认昵称和头像:', { nickname: nickname.value, avatar: userAvatar.value });
+    setTimeout(() => {
+      uni.showToast({ 
+        title: '欢迎体验游戏！已为您设置默认信息', 
+        icon: 'success',
+        duration: 3000
+      });
+    }, 500);
+  } else {
+    console.log('用户信息已存在:', { nickname: nickname.value, avatar: userAvatar.value, nicknameSaved: nicknameSaved.value });
+  }
+  
+  // 直接初始化WebSocket连接，无论是否设置了昵称
+  initWebSocket();
+  
+  // 监听头像更新事件
+  uni.$on('updateAvatar', (data) => {
+    let avatarToUpdate;
+    let isFromModal = false;
+    
+    if (typeof data === 'string') {
+      avatarToUpdate = data;
+    } else if (data && data.avatar) {
+      avatarToUpdate = data.avatar;
+      isFromModal = data.fromModal;
+    }
+    
+    if (avatarToUpdate) {
+      console.log('收到头像更新事件:', avatarToUpdate, '来自弹窗:', isFromModal, '弹窗状态:', showNicknameModal.value);
+      if (isFromModal) {
+        // 如果是从个性化弹窗触发的，更新临时头像
+        tempAvatar.value = avatarToUpdate;
+        console.log('更新临时头像为:', avatarToUpdate, '当前tempAvatar:', tempAvatar.value);
+      } else {
+        // 其他情况更新实际头像
+        userAvatar.value = avatarToUpdate;
+        console.log('更新实际头像为:', avatarToUpdate);
+      }
+    }
+  });
+  
+  // 监听临时头像更新事件
+  console.log('注册临时头像更新事件监听器');
+  uni.$on('updateTempAvatar', (newAvatar) => {
+    console.log('收到临时头像更新事件:', newAvatar, '当前tempAvatar值:', tempAvatar.value);
+    tempAvatar.value = newAvatar;
+    console.log('临时头像已更新为:', newAvatar, '更新后tempAvatar:', tempAvatar.value);
+  });
+  
+  // 创建全局头像更新函数和变量引用
+  const app = getApp();
+  if (!app.globalData) {
+    app.globalData = {};
+  }
+  
+  // 暴露变量引用给全局，供页面生命周期使用
+  app.globalData.tempAvatar = tempAvatar;
+  app.globalData.userAvatar = userAvatar;
+  app.globalData.showNicknameModal = showNicknameModal;
+  
+  app.globalData.updateUserAvatar = (newAvatar) => {
+    if (newAvatar) {
+      console.log('通过全局函数更新头像，弹窗状态:', showNicknameModal.value);
+      if (showNicknameModal.value) {
+        // 弹窗打开时更新临时头像
+        tempAvatar.value = newAvatar;
+        console.log('全局函数更新临时头像为:', newAvatar);
+      } else {
+        // 弹窗关闭时更新实际头像
+        if (newAvatar !== userAvatar.value) {
+          userAvatar.value = newAvatar;
+          console.log('全局函数更新实际头像为:', newAvatar);
+        }
+      }
+    }
+  };
+};
+
+
+const onUnload = () => {
+  console.log('首页卸载');
+  if (removeMessageCallback.value) {
+    removeMessageCallback.value();
+    console.log('清理消息回调');
+  }
+  if (createTimeout.value) {
+    clearTimeout(createTimeout.value);
+    console.log('清理超时计时器');
+  }
+  if (isConnected() && clientId.value && roomId.value) {
+    sendMessage({ action: 'leaveRoom', clientId: clientId.value, roomId: roomId.value });
+  }
+  closeWebSocket();
+  uni.removeStorageSync('clientId');
+  clientId.value = '';
+  hasNavigated.value = false;
+  console.log('清理 clientId');
+};
+
+const onReady = () => {
+  console.log('首页已准备');
+};
+
+</script>
+
+<script>
+export default {
+  onShow() {
+    console.log('首页 onShow 触发');
+    
+    // 简化逻辑，只处理正常的头像更新
+    // 临时头像更新已经交给定时器处理
+    const storedAvatar = uni.getStorageSync('userAvatar');
+    console.log('读取存储的头像:', storedAvatar);
+    
+    const app = getApp();
+    if (storedAvatar && app.globalData && app.globalData.updateUserAvatar) {
+      app.globalData.updateUserAvatar(storedAvatar);
+    }
+  }
+}
 </script>
 
 <style>
