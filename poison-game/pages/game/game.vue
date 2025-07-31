@@ -30,6 +30,7 @@
 </template>
 
 <script>
+import { ref, reactive, nextTick, onMounted, onUnmounted } from 'vue';
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
 import GameGrid from '../../components/GameGrid.vue';
 
@@ -37,89 +38,90 @@ export default {
   components: {
     GameGrid,
   },
-  data() {
-    return {
-      roomId: '',
-      clientId: '',
-      board: [],
-      players: [],
-      currentPlayer: null,
-      gameStarted: false,
-      status: 'waiting',
-      playerCount: 0,
-      boardSize: 5,
-      gameResult: null,
-      removeMessageCallback: null,
-      leaveTimeout: null,
-      isRestarting: false,
-      isSettingPoison: false,
-      restartRequested: false,
-      restartCount: 0,
-      isFlipping: false,
-      setPoisonTimeout: null,
-      flipTileTimeout: null,
-      hasJoined: false,
-    };
-  },
-  methods: {
-    async init() {
-      this.clientId = uni.getStorageSync('clientId');
-      console.log('game.vue clientId:', this.clientId);
-      if (!this.clientId) {
+  setup() {
+    // 响应式数据
+    const roomId = ref('');
+    const clientId = ref('');
+    const board = ref([]);
+    const players = ref([]);
+    const currentPlayer = ref(null);
+    const gameStarted = ref(false);
+    const status = ref('waiting');
+    const playerCount = ref(0);
+    const boardSize = ref(5);
+    const gameResult = ref(null);
+    const removeMessageCallback = ref(null);
+    const leaveTimeout = ref(null);
+    const isRestarting = ref(false);
+    const isSettingPoison = ref(false);
+    const restartRequested = ref(false);
+    const restartCount = ref(0);
+    const isFlipping = ref(false);
+    const setPoisonTimeout = ref(null);
+    const flipTileTimeout = ref(null);
+    const hasJoined = ref(false);
+
+    // 方法
+    const init = async () => {
+      clientId.value = uni.getStorageSync('clientId');
+      console.log('game.vue clientId:', clientId.value);
+      if (!clientId.value) {
         console.error('客户端 ID 缺失');
         uni.showToast({ title: '客户端 ID 缺失', icon: 'error' });
-        this.cleanupAndGoHome();
+        cleanupAndGoHome();
         return;
       }
       // 初始化空棋盘时不要强制创建，等待从服务器获取正确的尺寸
-      if (!this.board.length && this.boardSize > 0) {
-        this.$set(this, 'board', Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null)));
-        console.log('初始化空棋盘:', { boardSize: this.boardSize, board: this.board });
+      if (!board.value.length && boardSize.value > 0) {
+        board.value = Array(boardSize.value).fill().map(() => Array(boardSize.value).fill(null));
+        console.log('初始化空棋盘:', { boardSize: boardSize.value, board: board.value });
       }
-      if (this.hasJoined || this.players.some(p => p.id === this.clientId)) {
-        console.log('玩家已加入房间，跳过 join 请求:', { clientId: this.clientId, roomId: this.roomId });
-        this.registerMessageHandler();
+      if (hasJoined.value || players.value.some(p => p.id === clientId.value)) {
+        console.log('玩家已加入房间，跳过 join 请求:', { clientId: clientId.value, roomId: roomId.value });
+        registerMessageHandler();
         return;
       }
       if (!isConnected()) {
         try {
-          await connect(this.clientId);
+          await connect(clientId.value);
           console.log('WebSocket 连接成功');
           await new Promise(resolve => setTimeout(resolve, 2000));
-          this.registerMessageHandler();
-          this.sendJoinMessage();
+          registerMessageHandler();
+          sendJoinMessage();
         } catch (error) {
           console.error('WebSocket 初始化失败:', error);
           uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'none' });
           uni.hideLoading();
-          this.cleanupAndGoHome();
+          cleanupAndGoHome();
         }
       } else {
         console.log('WebSocket 已连接');
-        this.registerMessageHandler();
-        this.sendJoinMessage();
+        registerMessageHandler();
+        sendJoinMessage();
       }
-    },
-    sendJoinMessage() {
-      const joinMessage = { action: 'join', roomId: this.roomId, clientId: this.clientId, name: uni.getStorageSync('nickname') || `Player${Date.now()}` };
+    };
+
+    const sendJoinMessage = () => {
+      const joinMessage = { action: 'join', roomId: roomId.value, clientId: clientId.value, name: uni.getStorageSync('nickname') || `Player${Date.now()}` };
       const sent = sendMessage(joinMessage);
       if (sent) {
         console.log('发送加入房间请求:', joinMessage);
         uni.showLoading({ title: '加入房间中...' });
-        this.hasJoined = true;
+        hasJoined.value = true;
       } else {
         console.error('发送加入房间请求失败:', joinMessage);
         uni.showToast({ title: '网络未连接，加入失败', icon: 'error' });
         uni.hideLoading();
-        this.cleanupAndGoHome();
+        cleanupAndGoHome();
       }
-    },
-    registerMessageHandler() {
-      if (this.removeMessageCallback) {
-        this.removeMessageCallback();
+    };
+
+    const registerMessageHandler = () => {
+      if (removeMessageCallback.value) {
+        removeMessageCallback.value();
         console.log('移除旧消息回调');
       }
-      this.removeMessageCallback = onMessage((data) => {
+      removeMessageCallback.value = onMessage((data) => {
         console.log('游戏页面收到消息:', data);
         try {
           if (!data || !data.type) {
@@ -129,58 +131,58 @@ export default {
             return;
           }
           if (data.type === 'gameCreated') {
-            this.roomId = data.roomId;
+            roomId.value = data.roomId;
             uni.hideLoading();
             uni.showToast({ title: '房间创建成功', icon: 'success' });
-            this.updateGameState(data);
+            updateGameState(data);
           } else if (data.type === 'playerJoined') {
             console.log('处理 playerJoined，检查是否需要重置游戏状态:', {
               status: data.state.status,
               gameStarted: data.state.gameStarted,
               playersCount: data.state.players?.length,
-              currentBoard: this.board?.length
+              currentBoard: board.value?.length
             });
             
             // 如果状态回到 waiting，确保完全重置游戏状态
-            if (data.state.status === 'waiting' && this.status !== 'waiting') {
-              console.log('状态从', this.status, '变为 waiting，强制重置游戏状态');
+            if (data.state.status === 'waiting' && status.value !== 'waiting') {
+              console.log('状态从', status.value, '变为 waiting，强制重置游戏状态');
               // 重置所有游戏相关状态
-              this.gameResult = null;
-              this.isFlipping = false;
-              this.isSettingPoison = false;
-              this.restartRequested = false;
-              this.restartCount = 0;
+              gameResult.value = null;
+              isFlipping.value = false;
+              isSettingPoison.value = false;
+              restartRequested.value = false;
+              restartCount.value = 0;
             }
             
-            this.updateGameState(data);
+            updateGameState(data);
             uni.showToast({ title: '玩家加入房间', icon: 'success' });
             uni.hideLoading();
             if (data.state.status === 'settingPoison') {
               console.log('进入设置毒药阶段');
             }
           } else if (data.type === 'gameStarted') {
-            this.gameStarted = true;
-            this.isFlipping = false;
-            this.updateGameState(data);
+            gameStarted.value = true;
+            isFlipping.value = false;
+            updateGameState(data);
             uni.showToast({ title: '游戏开始！', icon: 'success' });
             uni.hideLoading();
           } else if (data.type === 'poisonSet') {
-            this.isSettingPoison = false;
-            if (this.setPoisonTimeout) {
-              clearTimeout(this.setPoisonTimeout);
-              this.setPoisonTimeout = null;
+            isSettingPoison.value = false;
+            if (setPoisonTimeout.value) {
+              clearTimeout(setPoisonTimeout.value);
+              setPoisonTimeout.value = null;
             }
-            this.updateGameState(data);
+            updateGameState(data);
             uni.hideLoading();
             uni.showToast({ title: data.success ? '毒药设置成功' : (data.message || '毒药设置失败'), icon: data.success ? 'success' : 'error' });
           } else if (data.type === 'tileFlipped') {
-            this.isFlipping = false;
-            if (this.flipTileTimeout) {
-              clearTimeout(this.flipTileTimeout);
-              this.flipTileTimeout = null;
+            isFlipping.value = false;
+            if (flipTileTimeout.value) {
+              clearTimeout(flipTileTimeout.value);
+              flipTileTimeout.value = null;
             }
             console.log('收到 tileFlipped 消息，更新 board:', JSON.parse(JSON.stringify(data.state.board)));
-            this.updateGameState(data);
+            updateGameState(data);
             uni.hideLoading();
             if (data.success) {
               if (data.isPoison) {
@@ -193,76 +195,75 @@ export default {
               uni.showToast({ title: data.gameResult.status === 'win' ? `胜利者：${data.gameResult.winner}` : '平局', icon: 'success' });
             }
           } else if (data.type === 'restartRequest') {
-            this.restartCount = data.restartCount || 0;
-            this.status = 'waitingForRestart';
-            uni.showToast({ title: `等待其他玩家同意重启 (${data.restartCount}/${this.playerCount})`, icon: 'none' });
+            restartCount.value = data.restartCount || 0;
+            status.value = 'waitingForRestart';
+            uni.showToast({ title: `等待其他玩家同意重启 (${data.restartCount}/${playerCount.value})`, icon: 'none' });
             uni.hideLoading();
           } else if (data.type === 'gameRestarted') {
             console.log('收到 gameRestarted 消息，开始重置游戏状态:', data);
-            this.isRestarting = false;
-            this.restartRequested = false;
-            this.restartCount = 0;
-            this.isFlipping = false;
-            this.isSettingPoison = false;
-            this.gameResult = null; // 重置 gameResult
-            this.hasJoined = true;
+            isRestarting.value = false;
+            restartRequested.value = false;
+            restartCount.value = 0;
+            isFlipping.value = false;
+            isSettingPoison.value = false;
+            gameResult.value = null; // 重置 gameResult
+            hasJoined.value = true;
             
             // 首先从消息中获取正确的棋盘尺寸
-            const correctBoardSize = data.state.boardSize || data.boardSize || this.boardSize;
-            if (correctBoardSize !== this.boardSize) {
-              console.log('gameRestarted: 更新棋盘尺寸:', this.boardSize, '->', correctBoardSize);
-              this.$set(this, 'boardSize', correctBoardSize);
+            const correctBoardSize = data.state.boardSize || data.boardSize || boardSize.value;
+            if (correctBoardSize !== boardSize.value) {
+              console.log('gameRestarted: 更新棋盘尺寸:', boardSize.value, '->', correctBoardSize);
+              boardSize.value = correctBoardSize;
             }
             
             // 强制重置棋盘为空，使用正确的尺寸
-            console.log('重置前棋盘状态:', { size: this.board.length, board: JSON.parse(JSON.stringify(this.board)) });
-            this.$set(this, 'board', Array(correctBoardSize).fill().map(() => Array(correctBoardSize).fill(null)));
-            console.log('重置后棋盘状态:', { size: correctBoardSize, board: JSON.parse(JSON.stringify(this.board)) });
+            console.log('重置前棋盘状态:', { size: board.value.length, board: JSON.parse(JSON.stringify(board.value)) });
+            board.value = Array(correctBoardSize).fill().map(() => Array(correctBoardSize).fill(null));
+            console.log('重置后棋盘状态:', { size: correctBoardSize, board: JSON.parse(JSON.stringify(board.value)) });
             
-            this.updateGameState(data);
+            updateGameState(data);
             uni.hideLoading();
             uni.showToast({ title: '游戏已重启', icon: 'success' });
-            this.$nextTick(() => {
-              this.$forceUpdate();
+            nextTick(() => {
               console.log('强制刷新 UI 后状态:', { 
-                status: this.status, 
-                board: JSON.parse(JSON.stringify(this.board)),
-                players: this.players.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut }))
+                status: status.value, 
+                board: JSON.parse(JSON.stringify(board.value)),
+                players: players.value.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut }))
               });
             });
           } else if (data.type === 'playerLeft') {
-            this.updateGameState(data);
+            updateGameState(data);
             uni.showToast({ title: '玩家已离开房间', icon: 'none' });
             uni.hideLoading();
           } else if (data.type === 'leftRoom') {
             uni.hideLoading();
-            if (this.leaveTimeout) {
-              clearTimeout(this.leaveTimeout);
-              this.leaveTimeout = null;
+            if (leaveTimeout.value) {
+              clearTimeout(leaveTimeout.value);
+              leaveTimeout.value = null;
             }
             console.log('收到 leftRoom 响应:', data);
-            this.cleanupAndGoHome();
+            cleanupAndGoHome();
           } else if (data.type === 'pong') {
             console.log('收到心跳响应:', data);
           } else if (data.type === 'error') {
             console.error('后端错误:', data.message);
             uni.showToast({ title: data.message || '服务器错误', icon: 'error' });
             uni.hideLoading();
-            this.isRestarting = false;
-            this.restartRequested = false;
-            this.isSettingPoison = false;
-            this.isFlipping = false;
-            if (this.setPoisonTimeout) {
-              clearTimeout(this.setPoisonTimeout);
-              this.setPoisonTimeout = null;
+            isRestarting.value = false;
+            restartRequested.value = false;
+            isSettingPoison.value = false;
+            isFlipping.value = false;
+            if (setPoisonTimeout.value) {
+              clearTimeout(setPoisonTimeout.value);
+              setPoisonTimeout.value = null;
             }
-            if (this.flipTileTimeout) {
-              clearTimeout(this.flipTileTimeout);
-              this.flipTileTimeout = null;
+            if (flipTileTimeout.value) {
+              clearTimeout(flipTileTimeout.value);
+              flipTileTimeout.value = null;
             }
             if (data.message === '玩家已在房间中') {
-              console.log('玩家已加入，跳过重复 join:', { clientId: this.clientId });
-              this.hasJoined = true;
+              console.log('玩家已加入，跳过重复 join:', { clientId: clientId.value });
+              hasJoined.value = true;
             }
           } else {
             console.warn('未处理的消息类型:', data.type);
@@ -272,21 +273,22 @@ export default {
           console.error('处理游戏消息失败:', error);
           uni.showToast({ title: '消息处理失败', icon: 'error' });
           uni.hideLoading();
-          this.isFlipping = false;
-          this.isSettingPoison = false;
-          if (this.setPoisonTimeout) {
-            clearTimeout(this.setPoisonTimeout);
-            this.setPoisonTimeout = null;
+          isFlipping.value = false;
+          isSettingPoison.value = false;
+          if (setPoisonTimeout.value) {
+            clearTimeout(setPoisonTimeout.value);
+            setPoisonTimeout.value = null;
           }
-          if (this.flipTileTimeout) {
-            clearTimeout(this.flipTileTimeout);
-            this.flipTileTimeout = null;
+          if (flipTileTimeout.value) {
+            clearTimeout(flipTileTimeout.value);
+            flipTileTimeout.value = null;
           }
         }
       });
       console.log('注册新消息回调');
-    },
-    updateGameState(data) {
+    };
+
+    const updateGameState = (data) => {
       console.log('更新游戏状态，收到数据:', data);
       if (!data || !data.state) {
         console.error('状态数据缺失:', data);
@@ -295,10 +297,10 @@ export default {
         return;
       }
       // 首先更新 boardSize，这样后续的棋盘创建会使用正确的尺寸
-      const newBoardSize = data.state.boardSize || data.boardSize || this.boardSize;
-      if (newBoardSize !== this.boardSize) {
-        console.log('更新棋盘尺寸:', this.boardSize, '->', newBoardSize);
-        this.$set(this, 'boardSize', newBoardSize);
+      const newBoardSize = data.state.boardSize || data.boardSize || boardSize.value;
+      if (newBoardSize !== boardSize.value) {
+        console.log('更新棋盘尺寸:', boardSize.value, '->', newBoardSize);
+        boardSize.value = newBoardSize;
       }
       
       // 强制重置棋盘：只在重启和等待状态时清空棋盘，设置毒药阶段保持棋盘状态
@@ -310,51 +312,52 @@ export default {
         : (Array.isArray(data.state.board) && data.state.board.every(row => Array.isArray(row))
             ? JSON.parse(JSON.stringify(data.state.board))
             : Array(newBoardSize).fill().map(() => Array(newBoardSize).fill(null)));
-      this.$set(this, 'board', newBoard);
+      board.value = newBoard;
       // 强制重置玩家状态：只在重启和等待状态下重置，设置毒药阶段需要保留玩家的毒药位置
       const shouldResetPlayerStates = data.type === 'gameRestarted' || 
                                      data.state.status === 'waiting';
       
-      this.$set(this, 'players', Array.isArray(data.state.players) ? data.state.players.map(p => ({
+      players.value = Array.isArray(data.state.players) ? data.state.players.map(p => ({
         ...p,
         id: p.clientId || p.id,
         poisonPos: shouldResetPlayerStates ? null : (p.poisonPos || null),
         isOut: shouldResetPlayerStates ? false : (p.isOut || false)
-      })) : []);
+      })) : [];
       const currentPlayerIndex = data.state.currentPlayerIndex >= 0 ? data.state.currentPlayerIndex : 0;
-      this.$set(this, 'currentPlayer', this.players[currentPlayerIndex] || null);
-      this.$set(this, 'gameStarted', data.state.gameStarted || false);
-      this.$set(this, 'status', data.state.status || 'waiting');
-      this.$set(this, 'playerCount', data.state.playerCount || data.playerCount || this.players.length);
+      currentPlayer.value = players.value[currentPlayerIndex] || null;
+      gameStarted.value = data.state.gameStarted || false;
+      status.value = data.state.status || 'waiting';
+      playerCount.value = data.state.playerCount || data.playerCount || players.value.length;
       if (data.gameResult) {
-        this.$set(this, 'gameResult', data.gameResult);
+        gameResult.value = data.gameResult;
       } else if (data.type === 'gameRestarted') {
-        this.$set(this, 'gameResult', null); // 确保重置
+        gameResult.value = null; // 确保重置
       }
       console.log('状态更新后:', {
         updateType: data.type,
-        status: this.status,
-        gameStarted: this.gameStarted,
+        status: status.value,
+        gameStarted: gameStarted.value,
         shouldResetBoard: shouldResetBoard,
         shouldResetPlayerStates: shouldResetPlayerStates,
-        players: this.players.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut })),
-        playerCount: this.playerCount,
-        boardRows: this.board.length,
-        boardCols: this.board.length ? this.board[0].length : 0,
-        currentPlayer: this.currentPlayer?.id,
-        currentPlayerName: this.currentPlayer?.name,
-        clientId: this.clientId,
-        board: JSON.parse(JSON.stringify(this.board)),
-        gameResult: this.gameResult
+        players: players.value.map(p => ({ id: p.id, name: p.name, poisonPos: p.poisonPos, isOut: p.isOut })),
+        playerCount: playerCount.value,
+        boardRows: board.value.length,
+        boardCols: board.value.length ? board.value[0].length : 0,
+        currentPlayer: currentPlayer.value?.id,
+        currentPlayerName: currentPlayer.value?.name,
+        clientId: clientId.value,
+        board: JSON.parse(JSON.stringify(board.value)),
+        gameResult: gameResult.value
       });
-      this.$nextTick(() => {
-        this.$forceUpdate();
+      nextTick(() => {
+        // Vue 3 不需要 $forceUpdate，响应式系统会自动更新
       });
-    },
-    handleCellClick({ row, col }) {
-      console.log('game.vue 收到 cell-click:', { row, col, status: this.status, currentPlayer: this.currentPlayer?.id, isSettingPoison: this.isSettingPoison });
-      if (this.isFlipping || this.isSettingPoison) {
-        console.log('操作进行中，忽略重复点击', { isFlipping: this.isFlipping, isSettingPoison: this.isSettingPoison });
+    };
+
+    const handleCellClick = ({ row, col }) => {
+      console.log('game.vue 收到 cell-click:', { row, col, status: status.value, currentPlayer: currentPlayer.value?.id, isSettingPoison: isSettingPoison.value });
+      if (isFlipping.value || isSettingPoison.value) {
+        console.log('操作进行中，忽略重复点击', { isFlipping: isFlipping.value, isSettingPoison: isSettingPoison.value });
         return;
       }
       if (!isConnected()) {
@@ -362,73 +365,74 @@ export default {
         uni.showToast({ title: '网络未连接，请检查网络', icon: 'error' });
         return;
       }
-      if (this.status === 'settingPoison') {
-        const player = this.players.find(p => p.id === this.clientId);
+      if (status.value === 'settingPoison') {
+        const player = players.value.find(p => p.id === clientId.value);
         if (!player) {
-          console.error('玩家未找到:', { clientId: this.clientId, players: this.players });
+          console.error('玩家未找到:', { clientId: clientId.value, players: players.value });
           uni.showToast({ title: '玩家未找到', icon: 'error' });
           return;
         }
         if (player.poisonPos) {
-          console.log('玩家已设置毒药:', { clientId: this.clientId });
+          console.log('玩家已设置毒药:', { clientId: clientId.value });
           uni.showToast({ title: '你已设置毒药', icon: 'none' });
           return;
         }
-        this.isSettingPoison = true;
-        const message = { action: 'setPoison', roomId: this.roomId, x: row, y: col, clientId: this.clientId };
+        isSettingPoison.value = true;
+        const message = { action: 'setPoison', roomId: roomId.value, x: row, y: col, clientId: clientId.value };
         const sent = sendMessage(message);
         if (sent) {
           console.log('发送设置毒药请求:', message);
           uni.showLoading({ title: '设置毒药中...' });
-          this.setPoisonTimeout = setTimeout(() => {
+          setPoisonTimeout.value = setTimeout(() => {
             console.error('设置毒药超时，未收到响应');
             uni.hideLoading();
             uni.showToast({ title: '设置毒药超时，请重试', icon: 'error' });
-            this.isSettingPoison = false;
-            this.setPoisonTimeout = null;
+            isSettingPoison.value = false;
+            setPoisonTimeout.value = null;
           }, 5000);
         } else {
           console.error('发送设置毒药失败:', message);
           uni.showToast({ title: '网络未连接，设置失败', icon: 'error' });
           uni.hideLoading();
-          this.isSettingPoison = false;
+          isSettingPoison.value = false;
         }
-      } else if (this.status === 'playing' && this.currentPlayer && this.currentPlayer.id === this.clientId) {
-        const currentPlayerData = this.players.find(p => p.id === this.clientId);
+      } else if (status.value === 'playing' && currentPlayer.value && currentPlayer.value.id === clientId.value) {
+        const currentPlayerData = players.value.find(p => p.id === clientId.value);
         console.log('翻转格子前玩家状态检查:', {
-          clientId: this.clientId,
-          currentPlayer: this.currentPlayer,
+          clientId: clientId.value,
+          currentPlayer: currentPlayer.value,
           currentPlayerData: currentPlayerData,
-          isMyTurn: this.currentPlayer?.id === this.clientId,
+          isMyTurn: currentPlayer.value?.id === clientId.value,
           playerIsOut: currentPlayerData?.isOut,
-          status: this.status
+          status: status.value
         });
-        this.isFlipping = true;
-        const message = { action: 'flipTile', roomId: this.roomId, x: row, y: col, clientId: this.clientId };
+        isFlipping.value = true;
+        const message = { action: 'flipTile', roomId: roomId.value, x: row, y: col, clientId: clientId.value };
         const sent = sendMessage(message);
         if (sent) {
           console.log('发送翻转格子请求:', message);
           uni.showLoading({ title: '翻转格子中...' });
-          this.flipTileTimeout = setTimeout(() => {
+          flipTileTimeout.value = setTimeout(() => {
             console.error('翻转格子超时，未收到响应');
             uni.hideLoading();
             uni.showToast({ title: '翻转格子超时，请重试', icon: 'error' });
-            this.isFlipping = false;
-            this.flipTileTimeout = null;
+            isFlipping.value = false;
+            flipTileTimeout.value = null;
           }, 5000);
         } else {
           console.error('发送翻转格子失败:', message);
           uni.showToast({ title: '网络未连接，请检查网络', icon: 'error' });
           uni.hideLoading();
-          this.isFlipping = false;
+          isFlipping.value = false;
         }
       } else {
-        console.log('无效操作', { status: this.status, currentPlayerId: this.currentPlayer?.id, clientId: this.clientId });
+        console.log('无效操作', { status: status.value, currentPlayerId: currentPlayer.value?.id, clientId: clientId.value });
         uni.showToast({ title: '当前无法操作，请等待你的回合', icon: 'none' });
       }
-    },
-    restartGame() {
-      if (this.isRestarting || this.restartRequested) {
+    };
+
+    const restartGame = () => {
+      if (isRestarting.value || restartRequested.value) {
         console.log('重启操作进行中，忽略重复点击');
         return;
       }
@@ -437,9 +441,9 @@ export default {
         uni.showToast({ title: '网络未连接，请检查网络', icon: 'error' });
         return;
       }
-      this.isRestarting = true;
-      this.restartRequested = true;
-      const message = { action: 'restart', roomId: this.roomId, clientId: this.clientId };
+      isRestarting.value = true;
+      restartRequested.value = true;
+      const message = { action: 'restart', roomId: roomId.value, clientId: clientId.value };
       const sent = sendMessage(message);
       if (sent) {
         console.log('发送重启请求:', message);
@@ -448,49 +452,51 @@ export default {
         console.error('发送重启请求失败:', message);
         uni.showToast({ title: '网络未连接，无法重启', icon: 'error' });
         uni.hideLoading();
-        this.isRestarting = false;
-        this.restartRequested = false;
+        isRestarting.value = false;
+        restartRequested.value = false;
       }
-    },
-    goBackHome() {
+    };
+
+    const goBackHome = () => {
       console.log('触发返回首页');
       if (!isConnected()) {
         console.warn('WebSocket 未连接，直接返回首页');
-        this.cleanupAndGoHome();
+        cleanupAndGoHome();
         return;
       }
-      const message = { action: 'leaveRoom', roomId: this.roomId, clientId: this.clientId };
+      const message = { action: 'leaveRoom', roomId: roomId.value, clientId: clientId.value };
       const sent = sendMessage(message);
       if (!sent) {
         console.warn('发送退出房间消息失败，直接返回首页');
-        this.cleanupAndGoHome();
+        cleanupAndGoHome();
         return;
       }
       console.log('发送退出房间请求:', message);
       uni.showLoading({ title: '正在退出房间...' });
-      this.leaveTimeout = setTimeout(() => {
+      leaveTimeout.value = setTimeout(() => {
         console.warn('退出房间超时，直接返回首页');
         uni.hideLoading();
-        this.cleanupAndGoHome();
+        cleanupAndGoHome();
       }, 2000);
-    },
-    cleanupAndGoHome() {
+    };
+
+    const cleanupAndGoHome = () => {
       console.log('清理资源并返回首页');
-      if (this.removeMessageCallback) {
-        this.removeMessageCallback();
-        this.removeMessageCallback = null;
+      if (removeMessageCallback.value) {
+        removeMessageCallback.value();
+        removeMessageCallback.value = null;
       }
-      if (this.leaveTimeout) {
-        clearTimeout(this.leaveTimeout);
-        this.leaveTimeout = null;
+      if (leaveTimeout.value) {
+        clearTimeout(leaveTimeout.value);
+        leaveTimeout.value = null;
       }
-      if (this.setPoisonTimeout) {
-        clearTimeout(this.setPoisonTimeout);
-        this.setPoisonTimeout = null;
+      if (setPoisonTimeout.value) {
+        clearTimeout(setPoisonTimeout.value);
+        setPoisonTimeout.value = null;
       }
-      if (this.flipTileTimeout) {
-        clearTimeout(this.flipTileTimeout);
-        this.flipTileTimeout = null;
+      if (flipTileTimeout.value) {
+        clearTimeout(flipTileTimeout.value);
+        flipTileTimeout.value = null;
       }
       closeWebSocket();
       uni.reLaunch({
@@ -511,15 +517,42 @@ export default {
           });
         },
       });
-    },
-    getCurrentPlayerName() {
-      const currentPlayer = this.players.find(p => p.id === this.clientId);
-      return currentPlayer ? `${currentPlayer.name} (${currentPlayer.emoji})` : '未知玩家';
-    },
-    getCurrentPlayerPoisonPos() {
-      const currentPlayer = this.players.find(p => p.id === this.clientId);
-      return currentPlayer ? currentPlayer.poisonPos : null;
-    },
+    };
+
+    const getCurrentPlayerName = () => {
+      const player = players.value.find(p => p.id === clientId.value);
+      return player ? `${player.name} (${player.emoji})` : '未知玩家';
+    };
+
+    const getCurrentPlayerPoisonPos = () => {
+      const player = players.value.find(p => p.id === clientId.value);
+      return player ? player.poisonPos : null;
+    };
+
+    // 返回给模板使用的数据和方法
+    return {
+      roomId,
+      clientId,
+      board,
+      players,
+      currentPlayer,
+      gameStarted,
+      status,
+      playerCount,
+      boardSize,
+      gameResult,
+      restartRequested,
+      restartCount,
+      hasJoined,
+      handleCellClick,
+      restartGame,
+      goBackHome,
+      getCurrentPlayerName,
+      getCurrentPlayerPoisonPos,
+      init,
+      updateGameState,
+      cleanupAndGoHome
+    };
   },
   onLoad(options) {
     console.log('游戏页面加载:', options);
@@ -558,23 +591,7 @@ export default {
   },
   onUnload() {
     console.log('游戏页面卸载');
-    if (this.removeMessageCallback) {
-      this.removeMessageCallback();
-      this.removeMessageCallback = null;
-    }
-    if (this.leaveTimeout) {
-      clearTimeout(this.leaveTimeout);
-      this.leaveTimeout = null;
-    }
-    if (this.setPoisonTimeout) {
-      clearTimeout(this.setPoisonTimeout);
-      this.setPoisonTimeout = null;
-    }
-    if (this.flipTileTimeout) {
-      clearTimeout(this.flipTileTimeout);
-      this.flipTileTimeout = null;
-    }
-    closeWebSocket();
+    this.cleanupAndGoHome();
   },
   onBackPress() {
     // 拦截返回按钮，直接返回首页

@@ -1,6 +1,6 @@
 <template>
   <view class="index">
-    <view class="title">女巫的毒药</view>
+    <view class="title">{{ safeConfig.appName || '女巫的毒药' }}</view>
     <view class="user-section">
       <view class="user-info">
         <view class="user-details">
@@ -89,8 +89,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { connect, sendMessage, onMessage, isConnected, closeWebSocket } from '../../utils/websocket';
+import config from '../../config/index.js';
+
+// 安全的配置对象
+const safeConfig = computed(() => config || {});
 
 // 初始化默认昵称和头像，确保第一次使用时就保存到本地
 let storedNickname = uni.getStorageSync('nickname');
@@ -342,7 +346,7 @@ const createRoom = async () => {
   }
   
   if (!clientId.value) {
-    console.error('clientId 缺失，尝试重新初始化');
+    console.log('正在初始化连接...');
     await initWebSocket();
     if (!clientId.value || !isConnected()) {
       uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
@@ -436,7 +440,7 @@ const joinRoom = async () => {
     return;
   }
   if (!clientId.value) {
-    console.error('clientId 缺失，尝试重新初始化');
+    console.log('正在初始化连接...');
     await initWebSocket();
     if (!clientId.value || !isConnected()) {
       uni.showToast({ title: '无法连接服务器，请稍后重试', icon: 'error' });
@@ -674,33 +678,39 @@ const onLoad = () => {
     console.log('临时头像已更新为:', newAvatar, '更新后tempAvatar:', tempAvatar.value);
   });
   
-  // 创建全局头像更新函数和变量引用
-  const app = getApp();
-  if (!app.globalData) {
-    app.globalData = {};
-  }
-  
-  // 暴露变量引用给全局，供页面生命周期使用
-  app.globalData.tempAvatar = tempAvatar;
-  app.globalData.userAvatar = userAvatar;
-  app.globalData.showNicknameModal = showNicknameModal;
-  
-  app.globalData.updateUserAvatar = (newAvatar) => {
-    if (newAvatar) {
-      console.log('通过全局函数更新头像，弹窗状态:', showNicknameModal.value);
-      if (showNicknameModal.value) {
-        // 弹窗打开时更新临时头像
-        tempAvatar.value = newAvatar;
-        console.log('全局函数更新临时头像为:', newAvatar);
-      } else {
-        // 弹窗关闭时更新实际头像
-        if (newAvatar !== userAvatar.value) {
-          userAvatar.value = newAvatar;
-          console.log('全局函数更新实际头像为:', newAvatar);
-        }
-      }
+  // 创建全局头像更新函数和变量引用（安全检查）
+  try {
+    const app = getApp();
+    if (app && !app.globalData) {
+      app.globalData = {};
     }
-  };
+    
+    // 暴露变量引用给全局，供页面生命周期使用
+    if (app && app.globalData) {
+      app.globalData.tempAvatar = tempAvatar;
+      app.globalData.userAvatar = userAvatar;
+      app.globalData.showNicknameModal = showNicknameModal;
+      
+      app.globalData.updateUserAvatar = (newAvatar) => {
+        if (newAvatar) {
+          console.log('通过全局函数更新头像，弹窗状态:', showNicknameModal.value);
+          if (showNicknameModal.value) {
+            // 弹窗打开时更新临时头像
+            tempAvatar.value = newAvatar;
+            console.log('全局函数更新临时头像为:', newAvatar);
+          } else {
+            // 弹窗关闭时更新实际头像
+            if (newAvatar !== userAvatar.value) {
+              userAvatar.value = newAvatar;
+              console.log('全局函数更新实际头像为:', newAvatar);
+            }
+          }
+        }
+      };
+    }
+  } catch (error) {
+    console.warn('无法获取全局App实例:', error);
+  }
 };
 
 

@@ -1,4 +1,4 @@
-import config from '../config';
+import config from '../config/index.js';
 
 const request = (url, method = 'GET', data = null) => {
   return new Promise((resolve, reject) => {

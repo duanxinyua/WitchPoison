@@ -16,7 +16,7 @@
       >
         <text v-if="cell === 'poison'">💀</text>
         <text v-else-if="cell">{{ cell }}</text>
-        <text v-else-if="showPoisonHint(rowIndex, colIndex)">💀</text>
+        <text v-else-if="showPoisonHint(rowIndex, colIndex)" class="poison-hint-text">💀</text>
         <text v-else></text>
       </view>
     </view>
@@ -24,7 +24,10 @@
 </template>
 
 <script>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+
 export default {
+  name: 'GameGrid',
   props: {
     board: {
       type: Array,
@@ -53,109 +56,118 @@ export default {
       default: 'waiting',
     },
   },
-  computed: {
-    boardSize() {
-      return (this.board && Array.isArray(this.board)) ? this.board.length || 5 : 5;
-    },
-  },
-  data() {
-    return {
-      isMounted: false,
-    };
-  },
-  methods: {
-    handleClick(e) {
-      const { row, col } = e.currentTarget.dataset;
-      const rowIndex = parseInt(row);
-      const colIndex = parseInt(col);
-      console.log('GameGrid handleClick ����:', { row: rowIndex, col: colIndex, isMounted: this.isMounted, boardValue: this.board[rowIndex][colIndex], gameStarted: this.gameStarted, poisonSet: this.poisonSet, gameResult: this.gameResult });
-      if (!this.board[rowIndex][colIndex] && !this.gameResult && this.isMounted) {
-        console.log('GameGrid ���� cell-click:', { row: rowIndex, col: colIndex });
-        this.$emit('cell-click', { row: rowIndex, col: colIndex });
+  emits: ['cell-click'],
+  setup(props, { emit }) {
+    const isMounted = ref(false)
+
+    const boardSize = computed(() => {
+      return (props.board && Array.isArray(props.board)) ? props.board.length || 5 : 5
+    })
+
+    const handleClick = (e) => {
+      const { row, col } = e.currentTarget.dataset
+      const rowIndex = parseInt(row)
+      const colIndex = parseInt(col)
+      console.log('GameGrid handleClick 详情:', { 
+        row: rowIndex, 
+        col: colIndex, 
+        isMounted: isMounted.value, 
+        boardValue: props.board[rowIndex][colIndex], 
+        gameStarted: props.gameStarted, 
+        poisonSet: props.poisonSet, 
+        gameResult: props.gameResult 
+      })
+      
+      if (!props.board[rowIndex][colIndex] && !props.gameResult && isMounted.value) {
+        console.log('GameGrid 触发 cell-click:', { row: rowIndex, col: colIndex })
+        emit('cell-click', { row: rowIndex, col: colIndex })
       } else {
-        console.warn('�����Ч:', { boardValue: this.board[rowIndex][colIndex], gameResult: this.gameResult, isMounted: this.isMounted });
+        console.warn('点击无效:', { 
+          boardValue: props.board[rowIndex][colIndex], 
+          gameResult: props.gameResult, 
+          isMounted: isMounted.value 
+        })
       }
-    },
-    showPoisonHint(row, col) {
+    }
+
+    const showPoisonHint = (row, col) => {
+      // 如果组件未挂载，直接返回false，避免不必要的日志
+      if (!isMounted.value) {
+        return false
+      }
+      
       // 只在设置毒药阶段显示自己的毒药位置
-      if (this.status === 'settingPoison' && this.currentPlayerPoison && 
-          typeof this.currentPlayerPoison.x === 'number' && 
-          typeof this.currentPlayerPoison.y === 'number') {
-        const shouldShow = this.currentPlayerPoison.x === row && this.currentPlayerPoison.y === col;
-        console.log('检查毒药提示:', { 
-          row, 
-          col, 
-          currentPlayerPoison: this.currentPlayerPoison, 
-          status: this.status, 
-          shouldShow 
-        });
-        return shouldShow;
+      if (props.status === 'settingPoison' && props.currentPlayerPoison && 
+          typeof props.currentPlayerPoison.x === 'number' && 
+          typeof props.currentPlayerPoison.y === 'number') {
+        const shouldShow = props.currentPlayerPoison.x === row && props.currentPlayerPoison.y === col
+        return shouldShow
       }
       
-      // 调试：记录为什么不显示毒药提示
-      if (this.status === 'settingPoison') {
-        console.log('设置毒药阶段但不显示提示:', {
-          row,
-          col,
-          status: this.status,
-          currentPlayerPoison: this.currentPlayerPoison,
-          hasPoison: !!this.currentPlayerPoison,
-          poisonX: this.currentPlayerPoison?.x,
-          poisonY: this.currentPlayerPoison?.y
-        });
+      return false
+    }
+
+    // 监听board变化
+    watch(() => props.board, (newBoard) => {
+      if (!Array.isArray(newBoard)) {
+        console.warn('GameGrid 收到无效的board数据:', newBoard)
+        return
       }
-      
-      return false;
-    },
-  },
-  watch: {
-    board: {
-      handler(newBoard) {
-        if (!Array.isArray(newBoard)) {
-          console.warn('GameGrid 收到无效的board数据:', newBoard);
-          return;
-        }
-        console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)));
-        // 安全地强制更新组件
-        this.$nextTick(() => {
-          try {
-            if (this.isMounted && this.$el) {
-              this.$forceUpdate();
-            }
-          } catch (error) {
-            console.warn('GameGrid forceUpdate 失败:', error);
-          }
-        });
-      },
-      deep: true,
-      immediate: false, // 改为false避免初始化时的问题
-    },
-    gameStarted(newVal) {
-      console.log('GameGrid gameStarted 更新:', newVal);
-    },
-    poisonSet(newVal) {
-      console.log('GameGrid poisonSet 更新:', newVal);
-    },
-    gameResult(newVal) {
-      console.log('GameGrid gameResult 更新:', newVal);
-    },
-  },
-  onLoad() {
-    console.log('GameGrid onLoad');
-  },
-  onShow() {
-    console.log('GameGrid onShow');
-    this.isMounted = true;
-  },
-  onReady() {
-    console.log('GameGrid onReady');
-    this.isMounted = true;
-  },
-  mounted() {
-    console.log('GameGrid mounted');
-    this.isMounted = true;
-  },
-};
+      console.log('GameGrid board 更新:', JSON.parse(JSON.stringify(newBoard)))
+      // Vue 3 中不需要手动forceUpdate，响应式系统会自动处理
+      nextTick(() => {
+        // 如果需要额外的DOM操作，可以在这里进行
+      })
+    }, { deep: true, immediate: false })
+
+    watch(() => props.gameStarted, (newVal) => {
+      console.log('GameGrid gameStarted 更新:', newVal)
+    })
+
+    watch(() => props.poisonSet, (newVal) => {
+      console.log('GameGrid poisonSet 更新:', newVal)
+    })
+
+    watch(() => props.gameResult, (newVal) => {
+      console.log('GameGrid gameResult 更新:', newVal)
+    })
+
+    onMounted(() => {
+      console.log('GameGrid mounted')
+      isMounted.value = true
+    })
+
+    onUnmounted(() => {
+      console.log('GameGrid unmounted')
+      isMounted.value = false
+    })
+
+    // UniApp 生命周期钩子
+    const onLoad = () => {
+      console.log('GameGrid onLoad')
+    }
+
+    const onShow = () => {
+      console.log('GameGrid onShow')
+      isMounted.value = true
+    }
+
+    const onReady = () => {
+      console.log('GameGrid onReady')
+      isMounted.value = true
+    }
+
+    return {
+      isMounted,
+      boardSize,
+      handleClick,
+      showPoisonHint,
+      onLoad,
+      onShow,
+      onReady
+    }
+  }
+}
 </script>
 
 <style>
@@ -326,44 +338,8 @@ export default {
 }
 
 /* 毒药提示文字样式 */
-.cell.poison-hint text {
+.poison-hint-text {
   font-size: 28rpx;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
-}
-
-/* 响应式设计 - 针对不同屏幕尺寸和棋盘大小调整 */
-@media screen and (max-width: 750rpx) {
-  .grid {
-    padding: calc(15rpx - var(--board-size, 5) * 0.8rpx);
-    gap: calc(6rpx - var(--board-size, 5) * 0.3rpx);
-  }
-  
-  .row {
-    gap: calc(6rpx - var(--board-size, 5) * 0.3rpx);
-  }
-  
-  .cell {
-    border-radius: 8rpx;
-    border-width: 1rpx;
-    /* 小屏幕上进一步优化尺寸 */
-    width: calc((100vw - 100rpx) / var(--board-size, 5));
-    height: calc((100vw - 100rpx) / var(--board-size, 5));
-  }
-}
-
-@media screen and (min-width: 1200rpx) {
-  .grid {
-    padding: 20rpx;
-    gap: 6rpx;
-  }
-  
-  .row {
-    gap: 6rpx;
-  }
-  
-  .cell {
-    border-radius: 15rpx;
-    border-width: 3rpx;
-  }
 }
 </style>

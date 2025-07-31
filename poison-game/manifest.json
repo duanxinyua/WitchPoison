@@ -1,15 +1,15 @@
 {
     "name" : "女巫的毒药",
-    "appid" : "",
+    "appid" : "__UNI__3AD6637",
     "description" : "女巫的毒药",
-    "versionName" : "1.0.0",
+    "versionName" : "1",
     "versionCode" : "100",
     "uni-app-x" : {},
     /* 快应用特有相关 */
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "",
+        "appid" : "wx85c2b499b79831e1",
         "setting" : {
             "urlCheck" : false,
             "minified" : true,
@@ -34,7 +34,7 @@
     "uniStatistics" : {
         "enable" : false
     },
-    "vueVersion" : "2",
+    "vueVersion" : "3",
     "app" : {
         "distribute" : {
             "icons" : {
@@ -47,5 +47,5 @@
             }
         }
     },
-    "charset": "utf-8"
+    "charset" : "utf-8"
 }
