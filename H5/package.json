@@ -1,0 +1,13 @@
+{
+  "name": "witchs-poison-online",
+  "version": "0.1.0",
+  "description": "女巫的毒药 联网版原型 (Node + ws + Redis)",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js"
+  },
+  "dependencies": {
+    "redis": "^4.6.7",
+    "ws": "^8.16.0"
+  }
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>女巫的毒药 | Witch's Poison</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>女巫的毒药</h1>
+      <p>联网房间制 · 2-5 人 · 轮流翻格，翻到毒药即出局</p>
+    </header>
+    <section class="panel" id="connect-panel">
+      <div class="mode-actions" id="modeActions">
+        <button id="chooseCreate" type="button">创建房间</button>
+        <button id="chooseJoin" type="button" class="ghost">加入房间</button>
+      </div>
+      <div id="formArea" hidden>
+        <div class="form-header">
+          <div id="modeTitle">模式</div>
+        </div>
+        <div class="field">
+          <label>房间号</label>
+          <div class="room-row">
+            <input id="roomId" placeholder="例如: 123456" required />
+            <button id="randomRoomBtn" type="button" class="ghost small">随机房间号</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>房间口令（可选，用于限制加入）</label>
+          <input id="roomKey" placeholder="如未设置可留空" />
+        </div>
+        <div class="field">
+          <label>昵称</label>
+          <div class="name-row">
+            <input id="playerName" placeholder="你的名字" required />
+            <button id="randomNameBtn" type="button" class="ghost small">随机昵称</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>标识 (emoji) <span id="emojiBadge" class="emoji-badge"></span></label>
+          <div class="emoji-row">
+            <button id="emojiDisplay" type="button" class="emoji-display">🙂</button>
+            <input id="playerEmoji" type="hidden" value="🙂" maxlength="4" />
+            <button id="emojiPicker" type="button" class="ghost small">选择</button>
+          </div>
+          <div id="emojiList" class="emoji-list" hidden></div>
+        </div>
+        <div class="field" id="boardSizeField">
+          <label>棋盘大小 (5-10)</label>
+          <input id="boardSize" type="number" min="5" max="10" value="6" />
+        </div>
+        <div class="action-row">
+          <button id="connectBtn">提交</button>
+          <button id="backBtn" type="button" class="ghost small">返回</button>
+        </div>
+      </div>
+      <div class="tips" id="status"></div>
+      <div class="info-row">
+        <button id="showRules" type="button" class="ghost small">游戏说明</button>
+      </div>
+      <div class="panel info" id="rulesPanel" hidden>
+        <div class="info-header">
+          <strong>规则说明</strong>
+          <button id="closeRules" type="button" class="ghost small">关闭</button>
+        </div>
+        <ul>
+          <li>人数 2-5，创建者可生成随机 6 位房号并设棋盘大小、口令。</li>
+          <li>两人对局毒药不可重叠，若重叠双方毒药清空需重新放置；三人及以上可重叠。</li>
+          <li>轮流翻格，翻到毒药者出局；仅存一人胜。</li>
+          <li>未翻格数等于存活人数且这些格都是毒药则平局。</li>
+          <li>主持人可在一局结束后重开，保留房间与玩家，重新放毒药。</li>
+          <li>房间号可点击复制；昵称、Emoji 可随机或自填。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" id="game-panel" hidden>
+      <div class="topbar">
+        <div>房间: <span id="roomLabel" class="copyable" title="点击复制房间号"></span></div>
+        <div>你的标识: <span id="yourEmoji"></span></div>
+        <div>棋盘: <span id="boardLabel"></span></div>
+      </div>
+      <div class="players" id="players"></div>
+      <div class="controls">
+        <button id="startBtn">主持人开始</button>
+        <button id="restartBtn" class="ghost" hidden>重开一局</button>
+        <button id="leaveBtn" class="ghost danger" hidden>离开房间</button>
+        <div class="tips" id="turnStatus"></div>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="tips" id="systemMsg"></div>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
